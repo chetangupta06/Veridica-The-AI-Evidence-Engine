@@ -4,11 +4,37 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight } from "lucide-react"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { Input } from "@/components/ui/input"
 
 export default function Home() {
-  const [claim, setClaim] = useState("")
+  const router = useRouter()
+  const [claimText, setClaimText] = useState("")
+  const [urlInput, setUrlInput] = useState("")
+  const [fileParsing, setFileParsing] = useState(false)
+
+  const handleAnalyze = (type: "text" | "url" | "file", content: string) => {
+    if (!content.trim()) return;
+
+    // Save to session storage
+    sessionStorage.setItem("veridica_input", JSON.stringify({ type, content }))
+    
+    // Navigate to analyze page
+    router.push("/analyze")
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setFileParsing(true)
+      // Mock parsing a file
+      setTimeout(() => {
+        setFileParsing(false)
+        handleAnalyze("file", `[Parsed from ${file.name}]: Coffee stunts your growth and causes spikes in blood pressure.`)
+      }, 1500)
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
@@ -49,52 +75,86 @@ export default function Home() {
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="text" className="mt-0">
+          <TabsContent value="text" className="mt-0 flex flex-col h-[200px]">
             <Textarea
               placeholder="E.g., 'Coffee stunts your growth' or 'Electric cars produce more emissions over their lifetime than gas cars...'"
-              className="min-h-[160px] text-lg resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent p-4"
-              value={claim}
-              onChange={(e) => setClaim(e.target.value)}
+              className="flex-1 text-lg resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent p-4"
+              value={claimText}
+              onChange={(e) => setClaimText(e.target.value)}
             />
-          </TabsContent>
-          <TabsContent value="url" className="mt-0">
-            <div className="flex items-center p-4 min-h-[160px] text-muted-foreground">
-              Enter a URL to a news article or blog post to analyze its claims.
+            <div className="flex items-center justify-between border-t p-4 mt-2">
+              <div className="text-sm text-muted-foreground">
+                {claimText.length} characters
+              </div>
+              <Button 
+                onClick={() => handleAnalyze("text", claimText)}
+                disabled={!claimText.trim()}
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-12 rounded-full"
+              >
+                Analyze Claim
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
             </div>
           </TabsContent>
-          <TabsContent value="upload" className="mt-0">
-            <div className="flex items-center justify-center p-4 min-h-[160px] border-2 border-dashed rounded-lg border-muted">
-              <p className="text-muted-foreground">Drag and drop a PDF or Document here</p>
+
+          <TabsContent value="url" className="mt-0 flex flex-col h-[200px]">
+            <div className="flex-1 p-4 flex items-center justify-center">
+              <Input 
+                type="url" 
+                placeholder="https://example.com/article" 
+                className="text-lg py-6"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center justify-end border-t p-4 mt-2">
+              <Button 
+                onClick={() => handleAnalyze("url", urlInput)}
+                disabled={!urlInput.trim()}
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-12 rounded-full"
+              >
+                Analyze URL
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
             </div>
           </TabsContent>
-          <TabsContent value="voice" className="mt-0">
-            <div className="flex flex-col items-center justify-center p-4 min-h-[160px] gap-4">
+
+          <TabsContent value="upload" className="mt-0 flex flex-col h-[200px]">
+            <div className="flex-1 p-4 flex items-center justify-center">
+              <div className="relative flex flex-col items-center justify-center w-full h-full border-2 border-dashed rounded-lg border-muted hover:border-primary/50 transition-colors bg-muted/20">
+                <input 
+                  type="file" 
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  onChange={handleFileUpload}
+                  disabled={fileParsing}
+                  accept=".pdf,.png,.jpg,.jpeg,.txt"
+                />
+                <FileText className="w-8 h-8 text-muted-foreground mb-2" />
+                <p className="text-muted-foreground font-medium">
+                  {fileParsing ? "Extracting text via OCR..." : "Click or drag and drop a document here"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Supports PDF, TXT, Images</p>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="voice" className="mt-0 flex flex-col h-[200px]">
+            <div className="flex-1 p-4 flex flex-col items-center justify-center gap-4">
               <Button variant="outline" size="icon" className="h-16 w-16 rounded-full border-primary/50 text-primary hover:bg-primary/10 hover:text-primary">
                 <Mic className="h-8 w-8" />
               </Button>
-              <p className="text-muted-foreground">Click to start speaking</p>
+              <p className="text-muted-foreground">Click to start speaking (Coming Soon)</p>
             </div>
           </TabsContent>
         </Tabs>
-
-        {/* Action Bar */}
-        <div className="flex items-center justify-between border-t p-4 pt-6 mt-2">
-          <div className="text-sm text-muted-foreground">
-            {claim.length} characters
-          </div>
-          <Link href={`/analyze?q=${encodeURIComponent(claim)}`}>
-            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-12 rounded-full">
-              Analyze Claim
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-        </div>
       </div>
       
       <div className="mt-16 text-center">
-        <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <Button variant="link" onClick={() => router.push("/settings")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           Configure API & Models
-        </Link>
+        </Button>
       </div>
     </div>
   )
