@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown } from "lucide-react"
+import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react"
 import { AboutModal } from "@/components/AboutModal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -91,6 +91,9 @@ function AnalyzeContent() {
   
   const [originalInput, setOriginalInput] = useState("")
   const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "retrieving" | "analyzing" | "done">("idle")
+  
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true)
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true)
   
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
@@ -339,29 +342,42 @@ function AnalyzeContent() {
         )}
 
         {/* Left Sidebar */}
-        <div className="w-80 border-r bg-muted/20 flex flex-col hidden lg:flex">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold text-sm text-muted-foreground mb-2">ORIGINAL INPUT</h3>
-            <div className="text-sm bg-card p-3 rounded-md border shadow-sm max-h-[150px] overflow-y-auto">
-              "{originalInput}"
+        {leftSidebarOpen ? (
+          <div className="w-80 border-r bg-muted/20 flex flex-col hidden lg:flex transition-all">
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-sm text-muted-foreground">ORIGINAL INPUT</h3>
+                <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2" onClick={() => setLeftSidebarOpen(false)}>
+                  <PanelLeftClose className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </div>
+              <div className="text-sm bg-card p-3 rounded-md border shadow-sm max-h-[150px] overflow-y-auto">
+                "{originalInput}"
+              </div>
+            </div>
+            
+            <div className="p-4 flex-1 flex flex-col min-h-0">
+              <h3 className="font-semibold text-sm text-muted-foreground mb-4">EXTRACTED CLAIMS ({analyzedClaims.length})</h3>
+              <ScrollArea className="flex-1 -mx-4 px-4">
+                <div className="space-y-3 animate-in slide-in-from-left-4 fade-in duration-700">
+                  {analyzedClaims.map((claim) => (
+                    <Card key={claim.id} className="border-l-4 transition-all hover:shadow-md" style={{ borderLeftColor: getVerdictStyle(claim.aggregatedVerdict).indicator }}>
+                      <CardContent className="p-3">
+                        <p className="text-sm line-clamp-3">{claim.text}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
           </div>
-          
-          <div className="p-4 flex-1 flex flex-col min-h-0">
-            <h3 className="font-semibold text-sm text-muted-foreground mb-4">EXTRACTED CLAIMS ({analyzedClaims.length})</h3>
-            <ScrollArea className="flex-1 -mx-4 px-4">
-              <div className="space-y-3 animate-in slide-in-from-left-4 fade-in duration-700">
-                {analyzedClaims.map((claim) => (
-                  <Card key={claim.id} className="border-l-4 transition-all hover:shadow-md" style={{ borderLeftColor: getVerdictStyle(claim.aggregatedVerdict).indicator }}>
-                    <CardContent className="p-3">
-                      <p className="text-sm line-clamp-3">{claim.text}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+        ) : (
+          <div className="w-12 border-r bg-muted/20 flex flex-col hidden lg:flex items-center py-4 transition-all">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setLeftSidebarOpen(true)}>
+              <PanelLeftOpen className="w-5 h-5 text-muted-foreground" />
+            </Button>
           </div>
-        </div>
+        )}
 
         {/* Main Area: Heatmap, Score, Verdicts */}
         <div className="flex-1 bg-background relative flex flex-col min-w-0">
@@ -497,59 +513,72 @@ function AnalyzeContent() {
           </div>
         </div>
 
-        {/* Right Sidebar: Consensus & Sources */}
-        <div className="w-80 border-l bg-muted/10 hidden xl:flex flex-col">
-          <div className="p-6 border-b animate-in slide-in-from-right-4 fade-in duration-700">
-            <h3 className="font-semibold text-sm text-muted-foreground mb-4">GLOBAL CONSENSUS</h3>
-            <div className="space-y-4">
-              {activeModels.map(model => {
-                let trueCount = 0; let falseCount = 0;
-                analyzedClaims.forEach(c => {
-                  const res = c.modelResults.find(m => m.model === model);
-                  if (res?.verdict.includes("True")) trueCount++;
-                  if (res?.verdict.includes("False")) falseCount++;
-                })
-                const globalVerdict = trueCount > falseCount ? "Mostly True" : falseCount > trueCount ? "Mostly False" : "Mixed";
-                const mStyle = getVerdictStyle(globalVerdict);
-                
-                return (
-                  <div key={model} className="flex justify-between items-center text-sm">
-                    <span>{MODEL_DISPLAY_NAMES[model]}</span>
-                    <Badge variant="outline" className={`${mStyle.color} ${mStyle.border}`}>
-                      {globalVerdict}
-                    </Badge>
-                  </div>
-                )
-              })}
+        {/* Right Sidebar */}
+        {rightSidebarOpen ? (
+          <div className="w-80 border-l bg-muted/10 flex flex-col hidden lg:flex transition-all">
+            <div className="p-6 pb-4 border-b">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-sm text-muted-foreground">GLOBAL CONSENSUS</h3>
+                <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2" onClick={() => setRightSidebarOpen(false)}>
+                  <PanelRightClose className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {activeModels.map(model => {
+                  let trueCount = 0; let falseCount = 0;
+                  analyzedClaims.forEach(c => {
+                    const res = c.modelResults.find(r => r.model === model);
+                    if (res?.verdict.includes("True")) trueCount++;
+                    if (res?.verdict.includes("False")) falseCount++;
+                  })
+                  const globalVerdict = trueCount > falseCount ? "Mostly True" : falseCount > trueCount ? "Mostly False" : "Mixed";
+                  const mStyle = getVerdictStyle(globalVerdict);
+                  
+                  return (
+                    <div key={model} className="flex justify-between items-center text-sm">
+                      <span>{MODEL_DISPLAY_NAMES[model]}</span>
+                      <Badge variant="outline" className={`${mStyle.color} ${mStyle.border}`}>
+                        {globalVerdict}
+                      </Badge>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            
+            <div className="p-6 flex-1 flex flex-col min-h-0 animate-in slide-in-from-right-4 fade-in duration-700 delay-100">
+              <h3 className="font-semibold text-sm text-muted-foreground mb-4">CITED SOURCES ({allSources.length})</h3>
+              <ScrollArea className="flex-1 -mx-2 px-2">
+                <div className="space-y-4">
+                  {allSources.length === 0 && <div className="text-xs text-muted-foreground text-center">No sources cited.</div>}
+                  {allSources.map((source, i) => (
+                    <div key={i} className="group cursor-pointer">
+                      <h4 className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
+                        {source.title}
+                      </h4>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3" />
+                          {source.domain}
+                        </span>
+                        <span>•</span>
+                        <span className={source.credibility === 'High' ? 'text-green-500' : source.credibility === 'Low' ? 'text-red-500' : 'text-yellow-500'}>
+                          {source.credibility}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
           </div>
-          
-          <div className="p-6 flex-1 flex flex-col min-h-0 animate-in slide-in-from-right-4 fade-in duration-700 delay-100">
-            <h3 className="font-semibold text-sm text-muted-foreground mb-4">CITED SOURCES ({allSources.length})</h3>
-            <ScrollArea className="flex-1 -mx-2 px-2">
-              <div className="space-y-4">
-                {allSources.length === 0 && <div className="text-xs text-muted-foreground text-center">No sources cited.</div>}
-                {allSources.map((source, i) => (
-                  <div key={i} className="group cursor-pointer">
-                    <h4 className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
-                      {source.title}
-                    </h4>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <ExternalLink className="w-3 h-3" />
-                        {source.domain}
-                      </span>
-                      <span>•</span>
-                      <span className={source.credibility === 'High' ? 'text-green-500' : source.credibility === 'Low' ? 'text-red-500' : 'text-yellow-500'}>
-                        {source.credibility}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+        ) : (
+          <div className="w-12 border-l bg-muted/10 flex flex-col hidden lg:flex items-center py-4 transition-all">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRightSidebarOpen(true)}>
+              <PanelRightOpen className="w-5 h-5 text-muted-foreground" />
+            </Button>
           </div>
-        </div>
+        )}
 
       </div>
 
