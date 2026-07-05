@@ -17,6 +17,7 @@ export type ExtractedClaim = {
   color?: string;
   bg?: string;
   border?: string;
+  isMock?: boolean;
 };
 
 export type ModelAnalysisResult = {
@@ -25,6 +26,7 @@ export type ModelAnalysisResult = {
   confidence: number;
   explanation: string;
   key_sources: { title: string; domain: string; credibility: "High" | "Medium" | "Low" }[];
+  isMock?: boolean;
 };
 
 export type ClaimAnalysis = ExtractedClaim & {
@@ -39,16 +41,19 @@ const MOCK_EXTRACTED_CLAIMS: ExtractedClaim[] = [
     id: 1,
     text: "Coffee stunts your growth and decreases bone density.",
     verdict: "FALSE",
+    isMock: true,
   },
   {
     id: 2,
     text: "Caffeine can cause temporary spikes in blood pressure.",
     verdict: "TRUE",
+    isMock: true,
   },
   {
     id: 3,
     text: "Electric cars produce 0 emissions over their entire lifecycle.",
     verdict: "FALSE",
+    isMock: true,
   }
 ];
 
@@ -100,7 +105,8 @@ const getMockAnalysis = (claimText: string, model: string): ModelAnalysisResult 
         verdict: "Misleading",
         confidence: 85,
         explanation: `${model} found that while caffeine doesn't stunt growth, high intake can interfere with calcium absorption in rare cases, making the absolute claim misleading.`,
-        key_sources: [{ title: "Nutrition Research", domain: "nutrition.org", credibility: "Medium" }]
+        key_sources: [{ title: "Nutrition Research", domain: "nutrition.org", credibility: "Medium" }],
+        isMock: true,
       }
     } else {
       return {
@@ -108,7 +114,8 @@ const getMockAnalysis = (claimText: string, model: string): ModelAnalysisResult 
         verdict: "False",
         confidence: 95,
         explanation: `${model} analyzed extensive pediatric studies which show zero correlation between coffee and bone growth.`,
-        key_sources: [{ title: "Harvard Health", domain: "health.harvard.edu", credibility: "High" }]
+        key_sources: [{ title: "Harvard Health", domain: "health.harvard.edu", credibility: "High" }],
+        isMock: true,
       }
     }
   } else if (claimText.includes("blood pressure")) {
@@ -117,7 +124,8 @@ const getMockAnalysis = (claimText: string, model: string): ModelAnalysisResult 
       verdict: hash % 2 === 0 ? "Partially True" : "Mostly True",
       confidence: 80 + (hash % 15),
       explanation: `${model} confirms temporary spikes happen, though tolerance develops rapidly in habitual drinkers.`,
-      key_sources: [{ title: "Mayo Clinic", domain: "mayoclinic.org", credibility: "High" }]
+      key_sources: [{ title: "Mayo Clinic", domain: "mayoclinic.org", credibility: "High" }],
+      isMock: true,
     }
   } else {
     // Default varied
@@ -128,7 +136,8 @@ const getMockAnalysis = (claimText: string, model: string): ModelAnalysisResult 
       verdict,
       confidence: 60 + (hash % 30),
       explanation: `${model} concluded the claim is ${verdict.toLowerCase()} based on current web corpus data.`,
-      key_sources: [{ title: "General Source", domain: "example.com", credibility: "Medium" }]
+      key_sources: [{ title: "General Source", domain: "example.com", credibility: "Medium" }],
+      isMock: true,
     }
   }
 }

@@ -9,7 +9,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send } from "lucide-react"
+import { toast } from "sonner"
+import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown } from "lucide-react"
+import { AboutModal } from "@/components/AboutModal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Suspense, useEffect, useState, useMemo } from "react"
@@ -83,7 +85,8 @@ const HeatmapText = ({ text, claims }: { text: string, claims: ClaimAnalysis[] }
 function AnalyzeContent() {
   const router = useRouter()
   const [smartRouting, setSmartRouting] = useState(true)
-  const [selectedModel, setSelectedModel] = useState(MODELS[0])
+  const [selectedModels, setSelectedModels] = useState<string[]>([MODELS[0]])
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   
   const [originalInput, setOriginalInput] = useState("")
   const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "analyzing" | "done">("idle")
@@ -91,7 +94,7 @@ function AnalyzeContent() {
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
 
-  const activeModels = smartRouting ? ["claude-3-5-sonnet", "gpt-4o", "gemini-1.5-pro"] : [selectedModel];
+  const activeModels = smartRouting ? ["claude-3-5-sonnet", "gpt-4o", "gemini-1.5-pro"] : selectedModels;
 
   useEffect(() => {
     // Load settings
@@ -100,7 +103,7 @@ function AnalyzeContent() {
       try {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
-        if (parsed.defaultModel) setSelectedModel(parsed.defaultModel)
+        if (parsed.defaultModel) setSelectedModels([parsed.defaultModel])
       } catch(e) {}
     }
 
@@ -135,6 +138,13 @@ function AnalyzeContent() {
     setLoadingState("extracting")
     try {
       const extracted = await extractClaims(text, modelsToUse[0])
+      
+      if (extracted.length > 0 && (extracted[0] as any).isMock) {
+        toast.warning("Mesh API rate limited or key invalid. Falling back to Demo Mode.");
+      } else {
+        toast.success(`Successfully extracted ${extracted.length} verifiable claims.`);
+      }
+
       setLoadingState("analyzing")
       const claimsToAnalyze = extracted.slice(0, 5) 
       const detailedClaims: ClaimAnalysis[] = []
@@ -164,8 +174,10 @@ function AnalyzeContent() {
           totalScore += c.aggregatedVerdict === "Mostly True" ? c.aggregatedConfidence : (100 - c.aggregatedConfidence);
         });
         setOverallScore(Math.round(totalScore / detailedClaims.length));
+        toast.success("Multi-model analysis complete.");
       } else {
         setOverallScore(0);
+        toast.error("No claims found to analyze.");
       }
     } catch (error) {
       console.error("Pipeline error:", error)
@@ -174,11 +186,7 @@ function AnalyzeContent() {
     }
   }
 
-  const handleModelChange = (model: string) => {
-    if (smartRouting) return
-    setSelectedModel(model)
-    if (originalInput) runFullPipeline(originalInput, [model])
-  }
+
 
   const handleExport = async () => {
     const element = document.getElementById("pdf-report-content")
@@ -231,8 +239,17 @@ function AnalyzeContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <AboutModal />
+            <Link href="https://github.com" target="_blank" rel="noreferrer">
+              <Button variant="ghost" size="icon">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+              </Button>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-3 border-l pl-4">
             <Button variant="outline" size="sm" onClick={() => { sessionStorage.removeItem("veridica_input"); router.push("/") }}>
               <Plus className="w-4 h-4 mr-2" /> New Analysis
             </Button>
@@ -246,18 +263,49 @@ function AnalyzeContent() {
             <label htmlFor="smart-routing" className="text-sm font-medium cursor-pointer text-muted-foreground">Smart Routing</label>
           </div>
           
-          <div className="hidden md:flex items-center gap-2 border-l pl-6">
+          <div className="hidden md:flex items-center gap-2 border-l pl-6 relative">
             <span className="text-sm text-muted-foreground mr-2">Route to:</span>
-            {MODELS.map((model) => (
-              <Badge 
-                key={model} 
-                variant={selectedModel === model && !smartRouting ? "default" : "secondary"}
-                className={`cursor-pointer transition-colors ${smartRouting ? 'opacity-50 pointer-events-none' : ''}`}
-                onClick={() => handleModelChange(model)}
+            <div className="relative">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className={`min-w-[180px] justify-between ${smartRouting ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                {MODEL_DISPLAY_NAMES[model]}
-              </Badge>
-            ))}
+                {selectedModels.length === 1 ? (MODEL_DISPLAY_NAMES[selectedModels[0]] || selectedModels[0]) : `${selectedModels.length} Models Selected`}
+                <ChevronDown className="w-4 h-4 ml-2 opacity-50" />
+              </Button>
+              {dropdownOpen && (
+                <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-primary/20 rounded-md shadow-xl z-50 p-2 flex flex-col gap-1">
+                  {MODELS.map(m => (
+                    <label key={m} className="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer text-sm font-medium transition-colors">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-primary text-primary focus:ring-primary w-4 h-4 accent-primary"
+                        checked={selectedModels.includes(m)}
+                        onChange={(e) => {
+                          let newModels;
+                          if (e.target.checked) {
+                            newModels = [...selectedModels, m];
+                          } else {
+                            newModels = selectedModels.filter(x => x !== m);
+                            if (newModels.length === 0) newModels = [m]; // Prevent empty
+                          }
+                          setSelectedModels(newModels)
+                        }}
+                      />
+                      {MODEL_DISPLAY_NAMES[m] || m}
+                    </label>
+                  ))}
+                  <div className="border-t mt-2 pt-2 text-right">
+                    <Button size="sm" className="w-full" onClick={() => {
+                       setDropdownOpen(false)
+                       if (originalInput) runFullPipeline(originalInput, selectedModels)
+                    }}>Apply & Run</Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -272,7 +320,7 @@ function AnalyzeContent() {
               {loadingState === "extracting" ? "Extracting verifiable claims..." : "Consulting multiple models..."}
             </h2>
             <p className="text-muted-foreground text-lg">
-              {smartRouting ? `Using ${activeModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}` : MODEL_DISPLAY_NAMES[selectedModel]}
+              {smartRouting ? `Using ${activeModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}` : `Using ${selectedModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}`}
             </p>
           </div>
         )}
@@ -304,7 +352,7 @@ function AnalyzeContent() {
 
         {/* Main Area: Heatmap, Score, Verdicts */}
         <div className="flex-1 bg-background relative flex flex-col min-w-0">
-          <ScrollArea className="flex-1">
+          <div className="absolute inset-0 overflow-y-auto pb-32">
             <div id="pdf-report-content" className="max-w-4xl mx-auto p-6 md:p-8 space-y-8 pb-32 animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both">
               
               {/* PDF Header (Hidden normally, shown during print) */}
@@ -325,13 +373,13 @@ function AnalyzeContent() {
                   <CardTitle className="text-2xl flex items-center gap-2">
                     Overall Verdict: <span className={`${verdictStyle.color} font-bold tracking-wide`}>{overallVerdictText}</span>
                   </CardTitle>
-                  <CardDescription>Based on analysis from {smartRouting ? "an ensemble of AI models" : MODEL_DISPLAY_NAMES[selectedModel]}.</CardDescription>
+                  <CardDescription>Based on analysis from {smartRouting ? "an ensemble of AI models" : selectedModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col md:flex-row items-center gap-8">
-                    <div className={`flex flex-col items-center justify-center w-32 h-32 shrink-0 rounded-full border-8 ${verdictStyle.border} ${verdictStyle.color} relative`}>
+                    <div className={`flex flex-col items-center justify-center w-36 h-36 shrink-0 rounded-full border-8 ${verdictStyle.border} ${verdictStyle.color} relative`}>
                       <span className="text-4xl font-bold">{overallScore}</span>
-                      <span className="text-xs uppercase tracking-wider font-semibold">Evidence Score</span>
+                      <span className="text-[10px] uppercase tracking-wider font-semibold text-center leading-tight mt-1 px-2">Evidence Score</span>
                     </div>
                     <div className="flex-1">
                       <h4 className="font-semibold mb-2">Text Heatmap</h4>
@@ -354,10 +402,10 @@ function AnalyzeContent() {
                 )}
 
                 <Accordion className="w-full space-y-4">
-                  {analyzedClaims.map((claim) => {
+                  {analyzedClaims.map((claim, index) => {
                     const style = getVerdictStyle(claim.aggregatedVerdict);
                     return (
-                      <AccordionItem key={claim.id} value={`item-${claim.id}`} className={`border ${style.border} rounded-lg bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow`}>
+                      <AccordionItem key={claim.id} value={`item-${claim.id}`} className={`border ${style.border} rounded-lg bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow animate-in slide-in-from-bottom-4 fade-in duration-500 fill-mode-both`} style={{ animationDelay: `${index * 150}ms` }}>
                         <AccordionTrigger className={`px-4 py-3 hover:no-underline ${style.bg}`}>
                           <div className="flex items-start justify-between w-full text-left pr-4 gap-4">
                             <span className="text-base font-semibold leading-tight flex-1">{claim.text}</span>
@@ -405,7 +453,9 @@ function AnalyzeContent() {
               </div>
 
             </div>
-          </ScrollArea>
+            {/* Spacer block to guarantee scroll clearance for absolute chat input */}
+            <div className="h-32 w-full shrink-0"></div>
+          </div>
 
           {/* Ask Follow-up Input anchored at bottom */}
           <div className="absolute bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t">
