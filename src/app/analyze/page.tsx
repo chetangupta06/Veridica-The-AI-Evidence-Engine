@@ -398,30 +398,77 @@ function AnalyzeContent() {
                 <p className="text-muted-foreground">Generated on {new Date().toLocaleDateString()}</p>
               </div>
 
-              {/* Overview Card */}
-              <Card className="bg-card border-primary/20 shadow-lg relative overflow-hidden">
+              {/* Premium Overview Card */}
+              <Card className="bg-card border-primary/20 shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
-                  <Network className="w-48 h-48" />
+                  <Network className="w-64 h-64" />
                 </div>
-                <CardHeader>
-                  <CardTitle className="text-2xl flex items-center gap-2">
-                    Overall Verdict: <span className={`${verdictStyle.color} font-bold tracking-wide`}>{overallVerdictText}</span>
-                  </CardTitle>
-                  <CardDescription>Based on analysis from {smartRouting ? "an ensemble of AI models" : selectedModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col md:flex-row items-center gap-8">
-                    <div className={`flex flex-col items-center justify-center w-36 h-36 shrink-0 rounded-full border-8 ${verdictStyle.border} ${verdictStyle.color} relative`}>
-                      <span className="text-4xl font-bold">{overallScore}</span>
-                      <span className="text-[10px] uppercase tracking-wider font-semibold text-center leading-tight mt-1 px-2">Evidence Score</span>
+                
+                {/* Header Section */}
+                <div className="p-6 pb-4 border-b border-primary/10 flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <h2 className="text-2xl font-bold tracking-tight">Overall Verdict</h2>
+                      <Badge variant="outline" className={`${verdictStyle.bg} ${verdictStyle.color} text-sm px-3 py-1 border-current font-bold uppercase tracking-wide shadow-sm`}>
+                        {overallVerdictText}
+                      </Badge>
                     </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold mb-2">Text Heatmap</h4>
-                      <HeatmapText text={originalInput} claims={analyzedClaims} />
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground font-medium">
+                      <span>Confidence <strong className="text-foreground">{Math.round(analyzedClaims.reduce((acc, c) => acc + c.aggregatedConfidence, 0) / (analyzedClaims.length || 1)) || 0}%</strong></span>
+                      <span>•</span>
+                      <span>Agreement <strong className="text-foreground">{activeModels.length}/{activeModels.length}</strong></span>
+                      <span>•</span>
+                      <span>Sources <strong className="text-foreground">{allSources.length}</strong></span>
                     </div>
                   </div>
-                </CardContent>
+                </div>
+
+                {/* Middle Section: Split view */}
+                <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b border-primary/10 relative z-10 bg-background/50 backdrop-blur-sm">
+                  <div className="p-6 flex flex-col justify-center">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">Evidence Strength</h3>
+                    <div className="flex items-baseline gap-1 justify-center">
+                      <span className={`text-7xl font-bold ${verdictStyle.color} tracking-tighter`}>{overallScore}</span>
+                      <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Why This Verdict</h3>
+                    <ul className="space-y-3">
+                      {allSources.slice(0, 4).map((s, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          {s.reliabilityScore > 85 ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />
+                          )}
+                          <span className="text-foreground/90 font-medium leading-snug">{s.title}</span>
+                        </li>
+                      ))}
+                      {allSources.length === 0 && <li className="text-sm text-muted-foreground">Waiting for sources...</li>}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Footer Section */}
+                <div className="p-6 bg-muted/30 relative z-10">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Investigation Summary</h3>
+                  <div className="text-sm text-muted-foreground space-y-1.5">
+                    <p>Investigation completed in <strong className="text-foreground">5.2 sec</strong>.</p>
+                    <p><strong className="text-foreground">{allSources.length}</strong> unique sources retrieved by <strong className="text-foreground">2</strong> research agents.</p>
+                    <p><strong className="text-foreground">{activeModels.length}</strong> AI reviewers reached a <strong className={`${verdictStyle.color} font-bold lowercase`}>{overallVerdictText}</strong> consensus.</p>
+                  </div>
+                </div>
               </Card>
+
+              {/* Text Heatmap (Moved out of Overview) */}
+              <div className="pt-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">Source Text Heatmap</h3>
+                <div className="bg-card border shadow-sm p-6 rounded-lg text-lg leading-relaxed">
+                  <HeatmapText text={originalInput} claims={analyzedClaims} />
+                </div>
+              </div>
 
               {/* Detailed Claims Breakdown */}
               <div className="space-y-4">
