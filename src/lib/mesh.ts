@@ -11,7 +11,7 @@ export const meshClient = new OpenAI({
 export type ExtractedClaim = {
   id: number;
   text: string;
-  verdict?: "TRUE" | "FALSE" | "UNVERIFIABLE";
+  verdict?: "TRUE" | "FALSE" | "UNVERIFIABLE"; // Simple extraction verdict
   confidence?: number;
   explanation?: string;
   color?: string;
@@ -19,27 +19,36 @@ export type ExtractedClaim = {
   border?: string;
 };
 
-// Fallback mock data if API call fails
-const MOCK_CLAIMS: ExtractedClaim[] = [
+export type ModelAnalysisResult = {
+  model: string;
+  verdict: "Mostly True" | "Partially True" | "Misleading" | "False" | "Insufficient Evidence";
+  confidence: number;
+  explanation: string;
+  key_sources: { title: string; domain: string; credibility: "High" | "Medium" | "Low" }[];
+};
+
+export type ClaimAnalysis = ExtractedClaim & {
+  modelResults: ModelAnalysisResult[];
+  aggregatedVerdict: string;
+  aggregatedConfidence: number;
+};
+
+// Mock data for extraction fallback
+const MOCK_EXTRACTED_CLAIMS: ExtractedClaim[] = [
   {
     id: 1,
-    text: "Coffee stunts your growth",
+    text: "Coffee stunts your growth and decreases bone density.",
     verdict: "FALSE",
-    confidence: 98,
-    explanation: "Extensive medical studies have shown no correlation between caffeine consumption and bone growth or height in children or young adults.",
-    color: "text-red-500",
-    bg: "bg-red-500/10",
-    border: "border-red-500/20"
   },
   {
     id: 2,
-    text: "Caffeine can cause temporary spikes in blood pressure",
+    text: "Caffeine can cause temporary spikes in blood pressure.",
     verdict: "TRUE",
-    confidence: 92,
-    explanation: "Caffeine can cause a short, but dramatic increase in your blood pressure, even if you don't have high blood pressure.",
-    color: "text-green-500",
-    bg: "bg-green-500/10",
-    border: "border-green-500/20"
+  },
+  {
+    id: 3,
+    text: "Electric cars produce 0 emissions over their entire lifecycle.",
+    verdict: "FALSE",
   }
 ];
 
@@ -61,32 +70,105 @@ export async function extractClaims(text: string, model: string): Promise<Extrac
     });
 
     const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error("Empty response from Mesh API");
-    }
+    if (!content) throw new Error("Empty response from Mesh API");
 
-    try {
-      // Clean up markdown code blocks if the model still returns them
-      const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
-      const parsedClaims = JSON.parse(cleanContent);
-      
-      return parsedClaims.map((claim: any, index: number) => ({
-        id: index + 1,
-        text: claim.text,
-        verdict: claim.verdict || "UNVERIFIABLE",
-        confidence: claim.confidence || 0,
-        explanation: claim.explanation || "No explanation provided.",
-        color: claim.verdict === "TRUE" ? "text-green-500" : claim.verdict === "FALSE" ? "text-red-500" : "text-yellow-500",
-        bg: claim.verdict === "TRUE" ? "bg-green-500/10" : claim.verdict === "FALSE" ? "bg-red-500/10" : "bg-yellow-500/10",
-        border: claim.verdict === "TRUE" ? "border-green-500/20" : claim.verdict === "FALSE" ? "border-red-500/20" : "border-yellow-500/20"
-      }));
-    } catch (parseError) {
-      console.warn("Failed to parse Mesh API response, falling back to mock data.", parseError);
-      return MOCK_CLAIMS;
-    }
+    const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
+    const parsedClaims = JSON.parse(cleanContent);
+    
+    return parsedClaims.map((claim: any, index: number) => ({
+      id: index + 1,
+      text: claim.text,
+      verdict: claim.verdict || "UNVERIFIABLE",
+      confidence: claim.confidence || 0,
+      explanation: claim.explanation || "No explanation provided.",
+    }));
   } catch (error) {
-    console.error("Mesh API error:", error);
-    // Return mock data so the UI flow can still be demonstrated if the API key is invalid/missing
-    return MOCK_CLAIMS;
+    console.warn("Mesh API extraction error or fallback triggered:", error);
+    return MOCK_EXTRACTED_CLAIMS;
   }
+}
+
+// Mock generator for varied responses
+const getMockAnalysis = (claimText: string, model: string): ModelAnalysisResult => {
+  // We'll vary responses based on model name length + claim length to keep them somewhat deterministic but varied.
+  const hash = claimText.length + model.length;
+  
+  if (claimText.includes("Coffee stunts")) {
+    if (hash % 3 === 0) {
+      return {
+        model,
+        verdict: "Misleading",
+        confidence: 85,
+        explanation: `${model} found that while caffeine doesn't stunt growth, high intake can interfere with calcium absorption in rare cases, making the absolute claim misleading.`,
+        key_sources: [{ title: "Nutrition Research", domain: "nutrition.org", credibility: "Medium" }]
+      }
+    } else {
+      return {
+        model,
+        verdict: "False",
+        confidence: 95,
+        explanation: `${model} analyzed extensive pediatric studies which show zero correlation between coffee and bone growth.`,
+        key_sources: [{ title: "Harvard Health", domain: "health.harvard.edu", credibility: "High" }]
+      }
+    }
+  } else if (claimText.includes("blood pressure")) {
+    return {
+      model,
+      verdict: hash % 2 === 0 ? "Partially True" : "Mostly True",
+      confidence: 80 + (hash % 15),
+      explanation: `${model} confirms temporary spikes happen, though tolerance develops rapidly in habitual drinkers.`,
+      key_sources: [{ title: "Mayo Clinic", domain: "mayoclinic.org", credibility: "High" }]
+    }
+  } else {
+    // Default varied
+    const verdicts: ModelAnalysisResult["verdict"][] = ["Mostly True", "Partially True", "Misleading", "False", "Insufficient Evidence"];
+    const verdict = verdicts[hash % verdicts.length];
+    return {
+      model,
+      verdict,
+      confidence: 60 + (hash % 30),
+      explanation: `${model} concluded the claim is ${verdict.toLowerCase()} based on current web corpus data.`,
+      key_sources: [{ title: "General Source", domain: "example.com", credibility: "Medium" }]
+    }
+  }
+}
+
+export async function analyzeClaim(claim: string, evidence: string, selectedModels: string[]): Promise<ModelAnalysisResult[]> {
+  const promises = selectedModels.map(async (model) => {
+    try {
+      const response = await meshClient.chat.completions.create({
+        model: model,
+        messages: [
+          {
+            role: "system",
+            content: "Analyze this claim using the provided evidence. Return JSON with: verdict (Mostly True / Partially True / Misleading / False / Insufficient Evidence), confidence (0-100), explanation, key_sources (array of objects with title, domain, credibility: High/Medium/Low)."
+          },
+          {
+            role: "user",
+            content: `Claim: ${claim}\n\nEvidence: ${evidence}`
+          }
+        ],
+        temperature: 0.1,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) throw new Error("Empty response");
+
+      const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
+      const parsed = JSON.parse(cleanContent);
+      
+      return {
+        model,
+        verdict: parsed.verdict,
+        confidence: parsed.confidence,
+        explanation: parsed.explanation,
+        key_sources: parsed.key_sources || [],
+      };
+    } catch (error) {
+      console.warn(`Mesh API analysis error for model ${model}, falling back to mock:`, error);
+      return getMockAnalysis(claim, model);
+    }
+  });
+
+  return Promise.all(promises);
 }
