@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { MESH_API_BASE_URL } from "./config";
+import type { EvidenceSnapshot } from "./retriever";
 
 // Mesh API acts as an OpenAI compatible endpoint
 export const meshClient = new OpenAI({
@@ -142,7 +143,7 @@ const getMockAnalysis = (claimText: string, model: string): ModelAnalysisResult 
   }
 }
 
-export async function analyzeClaim(claim: string, evidence: string, selectedModels: string[]): Promise<ModelAnalysisResult[]> {
+export async function analyzeClaim(claim: string, snapshot: EvidenceSnapshot, selectedModels: string[]): Promise<ModelAnalysisResult[]> {
   const promises = selectedModels.map(async (model) => {
     try {
       const response = await meshClient.chat.completions.create({
@@ -150,11 +151,11 @@ export async function analyzeClaim(claim: string, evidence: string, selectedMode
         messages: [
           {
             role: "system",
-            content: "Analyze this claim using the provided evidence. Return JSON with: verdict (Mostly True / Partially True / Misleading / False / Insufficient Evidence), confidence (0-100), explanation, key_sources (array of objects with title, domain, credibility: High/Medium/Low)."
+            content: "You are an expert fact-checking Reviewer. Analyze this claim using ONLY the provided Structured Evidence Snapshot (which has been gathered by Research Agents, validated, and deduplicated). Return JSON with: verdict (Mostly True / Partially True / Misleading / False / Insufficient Evidence), confidence (0-100), explanation, key_sources (array of objects with title, domain, credibility: High/Medium/Low)."
           },
           {
             role: "user",
-            content: `Claim: ${claim}\n\nEvidence: ${evidence}`
+            content: `Claim to analyze: ${claim}\n\nEvidence Snapshot:\n${JSON.stringify(snapshot, null, 2)}`
           }
         ],
         temperature: 0.1,

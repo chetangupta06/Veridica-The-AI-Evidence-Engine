@@ -16,6 +16,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Suspense, useEffect, useState, useMemo } from "react"
 import { extractClaims, analyzeClaim, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
+import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
 
 const MODELS = ["claude-3-5-sonnet", "gpt-4o", "gemini-1.5-pro", "grok", "deepseek-chat"]
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
@@ -89,7 +90,7 @@ function AnalyzeContent() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   
   const [originalInput, setOriginalInput] = useState("")
-  const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "analyzing" | "done">("idle")
+  const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "retrieving" | "analyzing" | "done">("idle")
   
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
@@ -145,12 +146,15 @@ function AnalyzeContent() {
         toast.success(`Successfully extracted ${extracted.length} verifiable claims.`);
       }
 
-      setLoadingState("analyzing")
+      setLoadingState("retrieving")
       const claimsToAnalyze = extracted.slice(0, 5) 
       const detailedClaims: ClaimAnalysis[] = []
       
       for (const claim of claimsToAnalyze) {
-        const results = await analyzeClaim(claim.text, text, modelsToUse)
+        const snapshot = await gatherEvidence(claim.text)
+        
+        setLoadingState("analyzing") // Switch state as we pass to models
+        const results = await analyzeClaim(claim.text, snapshot, modelsToUse)
         let totalConfidence = 0; let trueCount = 0; let falseCount = 0;
         
         results.forEach(r => {
@@ -164,7 +168,13 @@ function AnalyzeContent() {
         const finalConf = Math.min(100, avgConf + agreementBonus);
         const aggVerdict = trueCount > falseCount ? "Mostly True" : falseCount > trueCount ? "Mostly False" : "Mixed";
 
-        detailedClaims.push({ ...claim, modelResults: results, aggregatedVerdict: aggVerdict, aggregatedConfidence: finalConf })
+        detailedClaims.push({ 
+          ...claim, 
+          modelResults: results, 
+          aggregatedVerdict: aggVerdict, 
+          aggregatedConfidence: finalConf,
+          snapshot: snapshot
+        } as any)
       }
 
       setAnalyzedClaims(detailedClaims)
@@ -317,10 +327,13 @@ function AnalyzeContent() {
           <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
             <Loader2 className="h-16 w-16 text-primary animate-spin mb-6" />
             <h2 className="text-3xl font-bold mb-3 tracking-tight">
-              {loadingState === "extracting" ? "Extracting verifiable claims..." : "Consulting multiple models..."}
+              {loadingState === "extracting" && "Extracting verifiable claims..."}
+              {loadingState === "retrieving" && "Research Agents gathering evidence..."}
+              {loadingState === "analyzing" && "Consulting multiple models..."}
             </h2>
             <p className="text-muted-foreground text-lg">
-              {smartRouting ? `Using ${activeModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}` : `Using ${selectedModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}`}
+              {loadingState === "retrieving" && "Simulating Gemini & Grok Searches, removing duplicates, and generating Evidence Snapshot..."}
+              {loadingState === "analyzing" && (smartRouting ? `Using ${activeModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}` : `Using ${selectedModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}`)}
             </p>
           </div>
         )}
@@ -445,6 +458,24 @@ function AnalyzeContent() {
                               })}
                             </div>
                           </div>
+
+                          {(claim as any).snapshot && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Evidence Snapshot ({(claim as any).snapshot.sources.length} sources)</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {(claim as any).snapshot.sources.map((source: any) => (
+                                  <div key={source.id} className="p-3 border rounded-md bg-card flex flex-col text-sm">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <span className="font-semibold">{source.title}</span>
+                                      <Badge variant="outline" className="text-[10px] h-5 py-0">Found by {source.retrievedBy}</Badge>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><ExternalLink className="w-3 h-3"/> {source.domain} (Reliability: {source.reliabilityScore})</span>
+                                    <p className="text-muted-foreground italic text-xs">"{source.snippet}"</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </AccordionContent>
                       </AccordionItem>
                     )
