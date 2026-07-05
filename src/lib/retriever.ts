@@ -3,7 +3,7 @@ export type RetrievedSource = {
   domain: string;
   title: string;
   snippet: string;
-  retrievedBy: "Gemini" | "Grok" | "Merged";
+  retrievedBy: "Research Agent A" | "Research Agent B" | "Merged";
   reliabilityScore: number;
 };
 
@@ -28,7 +28,7 @@ async function geminiSearch(claim: string): Promise<RetrievedSource[]> {
       domain: "isro.gov.in",
       title: "Chandrayaan-3 Mission Details and Budget",
       snippet: "The approved cost of Chandrayaan-3 is Rs. 250 Crores (excluding Launch Vehicle Cost), bringing the total to roughly $74-75 million USD.",
-      retrievedBy: "Gemini",
+      retrievedBy: "Research Agent A",
       reliabilityScore: 98
     });
     sources.push({
@@ -36,7 +36,7 @@ async function geminiSearch(claim: string): Promise<RetrievedSource[]> {
       domain: "space.com",
       title: "India's Moon Mission Cheaper than Interstellar",
       snippet: "Chandrayaan-3 was famously completed for around $75 million, which is indeed less than the $165 million budget of Christopher Nolan's Interstellar.",
-      retrievedBy: "Gemini",
+      retrievedBy: "Research Agent A",
       reliabilityScore: 85
     });
   } else {
@@ -46,7 +46,7 @@ async function geminiSearch(claim: string): Promise<RetrievedSource[]> {
       domain: "reuters.com",
       title: "Fact Check: Recent claims analyzed",
       snippet: `General consensus regarding: ${claim.substring(0, 30)}... indicates mixed historical context.`,
-      retrievedBy: "Gemini",
+      retrievedBy: "Research Agent A",
       reliabilityScore: 80
     });
   }
@@ -68,7 +68,7 @@ async function grokSearch(claim: string): Promise<RetrievedSource[]> {
       domain: "space.com",
       title: "Chandrayaan-3 vs Interstellar Budget",
       snippet: "Costing only 75 million USD, the mission was a fraction of a Hollywood blockbuster budget.",
-      retrievedBy: "Grok",
+      retrievedBy: "Research Agent B",
       reliabilityScore: 82
     }); // This is a duplicate domain/topic to Gemini's second source
     
@@ -77,7 +77,7 @@ async function grokSearch(claim: string): Promise<RetrievedSource[]> {
       domain: "esa.int",
       title: "Lunar Orbit Space Debris Tracking",
       snippet: "While lunar orbit debris is a growing concern, Chandrayaan-3's propulsion module was strategically moved to a high Earth orbit to avoid creating lunar debris, contrary to some online claims.",
-      retrievedBy: "Grok",
+      retrievedBy: "Research Agent B",
       reliabilityScore: 95
     });
   } else {
@@ -86,7 +86,7 @@ async function grokSearch(claim: string): Promise<RetrievedSource[]> {
       domain: "apnews.com",
       title: "Breaking down viral claims",
       snippet: `Investigation into the claim shows conflicting data sources across major platforms.`,
-      retrievedBy: "Grok",
+      retrievedBy: "Research Agent B",
       reliabilityScore: 88
     });
   }

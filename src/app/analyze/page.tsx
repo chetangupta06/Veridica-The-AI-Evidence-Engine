@@ -230,9 +230,14 @@ function AnalyzeContent() {
 
   const allSources = useMemo(() => {
     const sourcesMap = new Map();
-    analyzedClaims.forEach(c => c.modelResults.forEach(m => m.key_sources.forEach(s => {
-      if (!sourcesMap.has(s.title)) sourcesMap.set(s.title, s);
-    })))
+    analyzedClaims.forEach(c => {
+      // Gather sources from the evidence snapshot instead of model citations
+      if ((c as any).snapshot && (c as any).snapshot.sources) {
+        (c as any).snapshot.sources.forEach((s: any) => {
+          if (!sourcesMap.has(s.title)) sourcesMap.set(s.title, s);
+        });
+      }
+    });
     return Array.from(sourcesMap.values());
   }, [analyzedClaims])
 
@@ -474,24 +479,6 @@ function AnalyzeContent() {
                               })}
                             </div>
                           </div>
-
-                          {(claim as any).snapshot && (
-                            <div>
-                              <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Evidence Snapshot ({(claim as any).snapshot.sources.length} sources)</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(claim as any).snapshot.sources.map((source: any) => (
-                                  <div key={source.id} className="p-3 border rounded-md bg-card flex flex-col text-sm">
-                                    <div className="flex justify-between items-start mb-2">
-                                      <span className="font-semibold">{source.title}</span>
-                                      <Badge variant="outline" className="text-[10px] h-5 py-0">Found by {source.retrievedBy}</Badge>
-                                    </div>
-                                    <span className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><ExternalLink className="w-3 h-3"/> {source.domain} (Reliability: {source.reliabilityScore})</span>
-                                    <p className="text-muted-foreground italic text-xs">"{source.snippet}"</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
                         </AccordionContent>
                       </AccordionItem>
                     )
@@ -562,10 +549,15 @@ function AnalyzeContent() {
                           {source.domain}
                         </span>
                         <span>•</span>
-                        <span className={source.credibility === 'High' ? 'text-green-500' : source.credibility === 'Low' ? 'text-red-500' : 'text-yellow-500'}>
-                          {source.credibility}
+                        <span className={source.reliabilityScore >= 90 ? 'text-green-500' : source.reliabilityScore >= 80 ? 'text-yellow-500' : 'text-red-500'}>
+                          Reliability: {source.reliabilityScore}
                         </span>
                       </div>
+                      {source.retrievedBy && (
+                        <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wider">
+                          Found by {source.retrievedBy}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
