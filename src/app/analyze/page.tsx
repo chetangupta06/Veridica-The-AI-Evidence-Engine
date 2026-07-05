@@ -387,7 +387,7 @@ function AnalyzeContent() {
         {/* Main Area: Heatmap, Score, Verdicts */}
         <div className="flex-1 bg-background relative flex flex-col min-w-0">
           <div className="absolute inset-0 overflow-y-auto pb-32">
-            <div id="pdf-report-content" className="max-w-4xl mx-auto p-6 md:p-8 space-y-8 pb-32 animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both">
+            <div key={loadingState} id="pdf-report-content" className="max-w-4xl mx-auto p-6 md:p-8 space-y-8 pb-32 animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both">
               
               {/* PDF Header (Hidden normally, shown during print) */}
               <div className="hidden print-header mb-8 pb-4 border-b">
