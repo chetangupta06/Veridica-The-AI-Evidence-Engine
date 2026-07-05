@@ -12,17 +12,35 @@ import { useEffect, useState } from "react"
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  
+  const [smartRouting, setSmartRouting] = useState(true)
+  const [defaultModel, setDefaultModel] = useState("claude-3-5-sonnet")
 
   // Avoid hydration mismatch
   useEffect(() => {
     setMounted(true)
+    const saved = localStorage.getItem("veridica_settings")
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
+        if (parsed.defaultModel) setDefaultModel(parsed.defaultModel)
+      } catch(e) {
+        console.error(e)
+      }
+    }
   }, [])
+
+  const handleSave = () => {
+    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, defaultModel }))
+    alert("Settings saved!")
+  }
 
   if (!mounted) return null
 
   return (
     <div className="min-h-screen bg-background pb-12">
-      <header className="border-b bg-card sticky top-0 z-10">
+      <header className="border-b bg-card sticky top-0 z-10 animate-in fade-in slide-in-from-top-2 duration-500">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/">
@@ -32,17 +50,17 @@ export default function SettingsPage() {
             </Link>
             <h1 className="font-semibold text-xl">Settings</h1>
           </div>
-          <Button className="gap-2 bg-primary hover:bg-primary/90">
+          <Button onClick={handleSave} className="gap-2 bg-primary hover:bg-primary/90 transition-transform active:scale-95">
             <Save className="h-4 w-4" />
             Save Changes
           </Button>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-6 mt-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
         
         {/* AI Models Section */}
-        <Card className="border-primary/10 shadow-sm">
+        <Card className="border-primary/10 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cpu className="h-5 w-5 text-primary" />
@@ -54,16 +72,16 @@ export default function SettingsPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Default Analysis Model</label>
-                <Select defaultValue="claude">
+                <Select value={defaultModel} onValueChange={(val) => { if(val) setDefaultModel(val) }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="claude">Claude 3.5 Sonnet</SelectItem>
-                    <SelectItem value="gpt4o">GPT-4o</SelectItem>
-                    <SelectItem value="gemini">Gemini 1.5 Pro</SelectItem>
+                    <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
+                    <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                    <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                     <SelectItem value="grok">Grok 2</SelectItem>
-                    <SelectItem value="deepseek">DeepSeek-V2</SelectItem>
+                    <SelectItem value="deepseek-chat">DeepSeek-V2</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">The primary model used when Smart Routing is disabled.</p>
@@ -90,13 +108,13 @@ export default function SettingsPage() {
                 <h4 className="font-medium">Enable Smart Routing</h4>
                 <p className="text-sm text-muted-foreground">Automatically pick the best model for each specific claim.</p>
               </div>
-              <Switch defaultChecked />
+              <Switch checked={smartRouting} onCheckedChange={setSmartRouting} />
             </div>
           </CardContent>
         </Card>
 
         {/* Analysis Preferences */}
-        <Card className="border-primary/10 shadow-sm">
+        <Card className="border-primary/10 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings2 className="h-5 w-5 text-primary" />
@@ -130,7 +148,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Appearance */}
-        <Card className="border-primary/10 shadow-sm">
+        <Card className="border-primary/10 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="h-5 w-5 text-primary" />
@@ -159,7 +177,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* API Usage Stats */}
-        <Card className="border-primary/10 shadow-sm">
+        <Card className="border-primary/10 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />
@@ -169,15 +187,15 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 border rounded-lg bg-card text-center">
+              <div className="p-4 border rounded-lg bg-card text-center hover:bg-muted/10 transition-colors">
                 <div className="text-2xl font-bold text-primary">1,245</div>
                 <div className="text-sm text-muted-foreground mt-1">Requests this month</div>
               </div>
-              <div className="p-4 border rounded-lg bg-card text-center">
+              <div className="p-4 border rounded-lg bg-card text-center hover:bg-muted/10 transition-colors">
                 <div className="text-2xl font-bold text-primary">8.4M</div>
                 <div className="text-sm text-muted-foreground mt-1">Tokens processed</div>
               </div>
-              <div className="p-4 border rounded-lg bg-card text-center">
+              <div className="p-4 border rounded-lg bg-card text-center hover:bg-muted/10 transition-colors">
                 <div className="text-2xl font-bold text-primary">$12.40</div>
                 <div className="text-sm text-muted-foreground mt-1">Estimated Cost</div>
               </div>
