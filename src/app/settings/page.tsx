@@ -1,0 +1,191 @@
+"use client"
+
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, Save, Activity, Settings2, Cpu, Palette } from "lucide-react"
+import Link from "next/link"
+import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
+
+export default function SettingsPage() {
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  // Avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
+
+  return (
+    <div className="min-h-screen bg-background pb-12">
+      <header className="border-b bg-card sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <h1 className="font-semibold text-xl">Settings</h1>
+          </div>
+          <Button className="gap-2 bg-primary hover:bg-primary/90">
+            <Save className="h-4 w-4" />
+            Save Changes
+          </Button>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto px-6 mt-8 space-y-8">
+        
+        {/* AI Models Section */}
+        <Card className="border-primary/10 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-primary" />
+              AI Models & Reasoning
+            </CardTitle>
+            <CardDescription>Configure which AI models to use for evidence extraction and analysis.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Default Analysis Model</label>
+                <Select defaultValue="claude">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="claude">Claude 3.5 Sonnet</SelectItem>
+                    <SelectItem value="gpt4o">GPT-4o</SelectItem>
+                    <SelectItem value="gemini">Gemini 1.5 Pro</SelectItem>
+                    <SelectItem value="grok">Grok 2</SelectItem>
+                    <SelectItem value="deepseek">DeepSeek-V2</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">The primary model used when Smart Routing is disabled.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Reasoning Depth</label>
+                <Select defaultValue="deep">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select depth" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fast">Fast (Lower latency, surface level)</SelectItem>
+                    <SelectItem value="balanced">Balanced</SelectItem>
+                    <SelectItem value="deep">Deep (Multi-step verification)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Deep reasoning takes longer but provides better accuracy.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-muted/40 rounded-lg border">
+              <div>
+                <h4 className="font-medium">Enable Smart Routing</h4>
+                <p className="text-sm text-muted-foreground">Automatically pick the best model for each specific claim.</p>
+              </div>
+              <Switch defaultChecked />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Analysis Preferences */}
+        <Card className="border-primary/10 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5 text-primary" />
+              Analysis Preferences
+            </CardTitle>
+            <CardDescription>Adjust how evidence is presented and scored.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">Strict Fact-Checking</h4>
+                <p className="text-sm text-muted-foreground">Require multiple highly-credible sources to verify a claim.</p>
+              </div>
+              <Switch defaultChecked />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">Show Political Bias Warning</h4>
+                <p className="text-sm text-muted-foreground">Flag claims that heavily rely on partisan sources.</p>
+              </div>
+              <Switch defaultChecked />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">Auto-Extract URLs</h4>
+                <p className="text-sm text-muted-foreground">Automatically fetch and read linked content within text.</p>
+              </div>
+              <Switch defaultChecked />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Appearance */}
+        <Card className="border-primary/10 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Palette className="h-5 w-5 text-primary" />
+              Appearance
+            </CardTitle>
+            <CardDescription>Customize the look and feel of Veridica.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">Theme Preference</h4>
+                <p className="text-sm text-muted-foreground">Choose between light, dark, or system default.</p>
+              </div>
+              <Select value={theme} onValueChange={(v) => { if (v) setTheme(v) }}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select theme" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* API Usage Stats */}
+        <Card className="border-primary/10 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              Mesh API Usage
+            </CardTitle>
+            <CardDescription>Your current API consumption and limits.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 border rounded-lg bg-card text-center">
+                <div className="text-2xl font-bold text-primary">1,245</div>
+                <div className="text-sm text-muted-foreground mt-1">Requests this month</div>
+              </div>
+              <div className="p-4 border rounded-lg bg-card text-center">
+                <div className="text-2xl font-bold text-primary">8.4M</div>
+                <div className="text-sm text-muted-foreground mt-1">Tokens processed</div>
+              </div>
+              <div className="p-4 border rounded-lg bg-card text-center">
+                <div className="text-2xl font-bold text-primary">$12.40</div>
+                <div className="text-sm text-muted-foreground mt-1">Estimated Cost</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+      </div>
+    </div>
+  )
+}
