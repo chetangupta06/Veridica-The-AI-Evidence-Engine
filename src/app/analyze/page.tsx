@@ -409,7 +409,7 @@ function AnalyzeContent() {
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-2xl font-bold tracking-tight">Overall Verdict</h2>
-                      <Badge variant="outline" className={`${verdictStyle.bg} ${verdictStyle.color} text-sm px-3 py-1 border-current font-bold uppercase tracking-wide shadow-sm`}>
+                      <Badge variant="outline" className={`${verdictStyle.bg} ${verdictStyle.color} text-sm px-4 py-1.5 border-current font-bold uppercase tracking-widest shadow-sm rounded-full`}>
                         {overallVerdictText}
                       </Badge>
                     </div>
@@ -428,7 +428,7 @@ function AnalyzeContent() {
                   <div className="p-6 flex flex-col justify-center">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">Evidence Strength</h3>
                     <div className="flex items-baseline gap-1 justify-center">
-                      <span className={`text-7xl font-bold ${verdictStyle.color} tracking-tighter`}>{overallScore}</span>
+                      <span className={`text-8xl font-serif font-bold ${verdictStyle.color} tracking-tighter`}>{overallScore}</span>
                       <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
                     </div>
                   </div>
@@ -454,10 +454,16 @@ function AnalyzeContent() {
                 {/* Footer Section */}
                 <div className="p-6 bg-muted/30 relative z-10">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Investigation Summary</h3>
-                  <div className="text-sm text-muted-foreground space-y-1.5">
-                    <p>Investigation completed in <strong className="text-foreground">5.2 sec</strong>.</p>
-                    <p><strong className="text-foreground">{allSources.length}</strong> unique sources retrieved by <strong className="text-foreground">2</strong> research agents.</p>
-                    <p><strong className="text-foreground">{activeModels.length}</strong> AI reviewers reached a <strong className={`${verdictStyle.color} font-bold lowercase`}>{overallVerdictText}</strong> consensus.</p>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p className="animate-in fade-in slide-in-from-bottom-2 duration-700 fill-mode-both" style={{ animationDelay: '200ms' }}>
+                      Investigation completed in <strong className="text-foreground">5.2 sec</strong>.
+                    </p>
+                    <p className="animate-in fade-in slide-in-from-bottom-2 duration-700 fill-mode-both" style={{ animationDelay: '1200ms' }}>
+                      <strong className="text-foreground">{allSources.length}</strong> unique sources retrieved by <strong className="text-foreground">2</strong> research agents.
+                    </p>
+                    <p className="animate-in fade-in slide-in-from-bottom-2 duration-700 fill-mode-both" style={{ animationDelay: '2200ms' }}>
+                      <strong className="text-foreground">{activeModels.length}</strong> AI reviewers reached a <strong className={`${verdictStyle.color} font-bold lowercase`}>{overallVerdictText}</strong> consensus.
+                    </p>
                   </div>
                 </div>
               </Card>
