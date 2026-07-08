@@ -97,7 +97,7 @@ function AnalyzeContent() {
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
 
-  const activeModels = smartRouting ? ["claude-3-5-sonnet", "gpt-4o", "gemini-1.5-pro"] : selectedModels;
+  const activeModels = smartRouting ? ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-pro-1.5"] : selectedModels;
 
   useEffect(() => {
     // Load settings
@@ -127,7 +127,7 @@ function AnalyzeContent() {
            if (parsed.smartRouting !== undefined) sm = parsed.smartRouting
            if (parsed.defaultModel) dm = parsed.defaultModel
         }
-        const initialModels = sm ? ["claude-3-5-sonnet", "gpt-4o", "gemini-1.5-pro"] : [dm];
+        const initialModels = sm ? ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-pro-1.5"] : [dm];
         runFullPipeline(textToAnalyze, initialModels)
       } catch (e) {
         console.error("Failed to parse input payload", e)
