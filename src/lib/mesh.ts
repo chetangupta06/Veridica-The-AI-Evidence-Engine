@@ -7,8 +7,12 @@ export const getMeshClient = () => {
   const apiKey = typeof window !== 'undefined' ? localStorage.getItem("veridica_api_key") : null;
   if (!apiKey) throw new Error("API_KEY_MISSING");
   
+  const baseURL = MESH_API_BASE_URL.startsWith("/") && typeof window !== "undefined"
+    ? `${window.location.origin}${MESH_API_BASE_URL}`
+    : MESH_API_BASE_URL;
+
   return new OpenAI({
-    baseURL: MESH_API_BASE_URL,
+    baseURL: baseURL,
     apiKey: apiKey,
     dangerouslyAllowBrowser: true, // Only for demo purposes in this frontend app
   });
