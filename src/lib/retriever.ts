@@ -51,12 +51,12 @@ async function performSearchWithLLM(claim: string, model: string, agentName: "Re
 
 // Simulated Research Agent A (Gemini)
 async function geminiSearch(claim: string): Promise<RetrievedSource[]> {
-  return performSearchWithLLM(claim, "gemini-1.5-pro", "Research Agent A");
+  return performSearchWithLLM(claim, "google/gemini-pro-1.5", "Research Agent A");
 }
 
 // Simulated Research Agent B (Grok)
 async function grokSearch(claim: string): Promise<RetrievedSource[]> {
-  return performSearchWithLLM(claim, "grok", "Research Agent B");
+  return performSearchWithLLM(claim, "x-ai/grok-4.3", "Research Agent B");
 }
 
 // Merge, Validate, and Deduplicate

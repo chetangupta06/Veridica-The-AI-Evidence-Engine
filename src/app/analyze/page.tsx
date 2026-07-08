@@ -18,13 +18,12 @@ import { Suspense, useEffect, useState, useMemo } from "react"
 import { extractClaims, analyzeClaim, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
 import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
 
-const MODELS = ["claude-3-5-sonnet", "gpt-4o", "gemini-1.5-pro", "grok", "deepseek-chat"]
+const MODELS = ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-pro-1.5"]
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
-  "claude-3-5-sonnet": "Claude 3.5 Sonnet",
-  "gpt-4o": "GPT-4o",
-  "gemini-1.5-pro": "Gemini 1.5 Pro",
-  "grok": "Grok 2",
-  "deepseek-chat": "DeepSeek-V2"
+  "anthropic/claude-sonnet-4.5": "Claude 3.5 Sonnet",
+  "openai/gpt-4o": "GPT-4o",
+  "google/gemini-pro-1.5": "Gemini 1.5 Pro",
+  "x-ai/grok-4.3": "Grok",
 }
 
 const getVerdictStyle = (verdict: string) => {
