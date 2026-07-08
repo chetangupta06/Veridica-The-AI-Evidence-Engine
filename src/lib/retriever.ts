@@ -52,7 +52,7 @@ async function performSearchWithLLM(claim: string, model: string, agentName: "Re
 
 // Simulated Research Agent A (Gemini)
 async function geminiSearch(claim: string): Promise<RetrievedSource[]> {
-  return performSearchWithLLM(claim, "google/gemini-3.1-pro-preview", "Research Agent A");
+  return performSearchWithLLM(claim, "google/gemini-flash-1.5", "Research Agent A");
 }
 
 // Simulated Research Agent B (Grok)

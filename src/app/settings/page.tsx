@@ -16,7 +16,7 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false)
   
   const [smartRouting, setSmartRouting] = useState(true)
-  const [defaultModel, setDefaultModel] = useState("anthropic/claude-sonnet-4.5")
+  const [defaultModel, setDefaultModel] = useState("anthropic/claude-3-haiku")
   const [apiKey, setApiKey] = useState("")
 
   // Avoid hydration mismatch
@@ -112,11 +112,10 @@ export default function SettingsPage() {
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="anthropic/claude-sonnet-4.5">Claude 3.5 Sonnet</SelectItem>
-                    <SelectItem value="openai/gpt-4o">GPT-4o</SelectItem>
-                    <SelectItem value="google/gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
-                    <SelectItem value="x-ai/grok-4.3">Grok 2</SelectItem>
-                    <SelectItem value="deepseek/deepseek-chat">DeepSeek-V2</SelectItem>
+                    <SelectItem value="anthropic/claude-3-haiku">Claude 3 Haiku</SelectItem>
+                    <SelectItem value="openai/gpt-4o-mini">GPT-4o Mini</SelectItem>
+                    <SelectItem value="google/gemini-flash-1.5">Gemini 1.5 Flash</SelectItem>
+                    <SelectItem value="x-ai/grok-4.3">Grok</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">The primary model used when Smart Routing is disabled.</p>
