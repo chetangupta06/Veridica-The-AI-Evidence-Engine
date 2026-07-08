@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AboutModal } from "@/components/AboutModal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -526,9 +527,28 @@ function AnalyzeContent() {
                                         <span className="font-medium text-sm">{MODEL_DISPLAY_NAMES[res.model] || res.model}</span>
                                         <span className={`text-xs font-bold ${mStyle.color}`}>{res.verdict}</span>
                                       </div>
-                                      <p className="text-sm text-muted-foreground mb-4">
+                                      <p className="text-sm text-muted-foreground mb-1 line-clamp-6">
                                         {res.explanation}
                                       </p>
+                                      {res.explanation.length > 250 && (
+                                        <Dialog>
+                                          <DialogTrigger className="text-xs text-primary mb-4 w-fit hover:underline text-left cursor-pointer">
+                                            See more
+                                          </DialogTrigger>
+                                          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                                            <DialogHeader>
+                                              <DialogTitle>{MODEL_DISPLAY_NAMES[res.model] || res.model} Analysis</DialogTitle>
+                                              <DialogDescription>
+                                                Detailed breakdown of the claim.
+                                              </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap mt-4">
+                                              {res.explanation}
+                                            </div>
+                                          </DialogContent>
+                                        </Dialog>
+                                      )}
+                                      {res.explanation.length <= 250 && <div className="mb-4" />}
                                     </div>
                                     <div className="space-y-1.5">
                                       <div className="flex justify-between text-xs text-muted-foreground">
