@@ -9,8 +9,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing Authorization header" }, { status: 401 });
     }
 
-    // Try standard OpenAI compatible URL without /v1 based on docs
-    const meshUrl = "https://api.meshapi.ai/chat/completions";
+    // The Mesh API uses /v1
+    const meshUrl = "https://api.meshapi.ai/v1/chat/completions";
 
     const response = await fetch(meshUrl, {
       method: "POST",
