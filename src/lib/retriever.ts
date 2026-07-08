@@ -2,6 +2,7 @@ export type RetrievedSource = {
   id: string;
   domain: string;
   title: string;
+  url: string;
   snippet: string;
   retrievedBy: "Research Agent A" | "Research Agent B" | "Merged";
   reliabilityScore: number;
@@ -23,7 +24,7 @@ async function performSearchWithLLM(claim: string, model: string, agentName: "Re
     messages: [
       {
         role: "system",
-        content: `You are ${agentName}, a web research agent. For the given claim, search your knowledge base to retrieve 2-3 highly relevant, factual sources that provide evidence (supporting or refuting). Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), title (string), snippet (string excerpt), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json.`
+        content: `You are ${agentName}, a web research agent. For the given claim, search your knowledge base to retrieve 2-3 highly relevant, factual sources that provide evidence (supporting or refuting). Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), url (string absolute URL), title (string), snippet (string excerpt), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json.`
       },
       {
         role: "user",

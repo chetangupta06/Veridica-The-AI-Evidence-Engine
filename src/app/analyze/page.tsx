@@ -429,8 +429,17 @@ function AnalyzeContent() {
                   <div className="p-6 flex flex-col justify-center">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">Evidence Strength</h3>
                     <div className="flex items-baseline gap-1 justify-center">
-                      <span className={`text-8xl font-serif font-bold ${verdictStyle.color} tracking-tighter`}>{overallScore}</span>
-                      <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
+                      {loadingState !== "done" ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                          <span className="text-2xl text-muted-foreground font-medium">Analyzing...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <span className={`text-8xl font-serif font-bold ${verdictStyle.color} tracking-tighter`}>{overallScore}</span>
+                          <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   
@@ -593,12 +602,12 @@ function AnalyzeContent() {
                 <div className="space-y-4">
                   {allSources.length === 0 && <div className="text-xs text-muted-foreground text-center">No sources cited.</div>}
                   {allSources.map((source, i) => (
-                    <div key={i} className="group cursor-pointer">
+                    <a key={i} href={source.url || "#"} target="_blank" rel="noopener noreferrer" className="group cursor-pointer block hover:bg-muted/50 p-2 -mx-2 rounded-md transition-colors">
                       <h4 className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
                         {source.title}
                       </h4>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 group-hover:text-primary transition-colors">
                           <ExternalLink className="w-3 h-3" />
                           {source.domain}
                         </span>
@@ -612,7 +621,7 @@ function AnalyzeContent() {
                           Found by {source.retrievedBy}
                         </div>
                       )}
-                    </div>
+                    </a>
                   ))}
                 </div>
               </ScrollArea>
