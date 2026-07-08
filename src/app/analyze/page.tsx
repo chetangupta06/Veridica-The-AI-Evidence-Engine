@@ -20,11 +20,11 @@ import { Suspense, useEffect, useState, useMemo } from "react"
 import { extractClaims, analyzeClaim, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
 import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
 
-const MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-flash-1.5"]
+const MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "anthropic/claude-3-haiku": "Claude 3 Haiku",
   "openai/gpt-4o-mini": "GPT-4o Mini",
-  "google/gemini-flash-1.5": "Gemini 1.5 Flash",
+  "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite",
   "x-ai/grok-4.3": "Grok",
 }
 
@@ -99,7 +99,7 @@ function AnalyzeContent() {
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
 
-  const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-flash-1.5"] : selectedModels;
+  const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
   useEffect(() => {
     // Load settings
@@ -129,7 +129,7 @@ function AnalyzeContent() {
            if (parsed.smartRouting !== undefined) sm = parsed.smartRouting
            if (parsed.defaultModel) dm = parsed.defaultModel
         }
-        const initialModels = sm ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-flash-1.5"] : [dm];
+        const initialModels = sm ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : [dm];
         runFullPipeline(textToAnalyze, initialModels)
       } catch (e) {
         console.error("Failed to parse input payload", e)
@@ -166,7 +166,7 @@ function AnalyzeContent() {
         const avgConf = Math.round(totalConfidence / results.length);
         const agreementBonus = (results.length > 1 && (trueCount === results.length || falseCount === results.length)) ? 10 : 0;
         const finalConf = Math.min(100, avgConf + agreementBonus);
-        const aggVerdict = trueCount > falseCount ? "Mostly True" : falseCount > trueCount ? "Mostly False" : "Mixed";
+        const aggVerdict = trueCount > falseCount ? (falseCount === 0 ? "True" : "Mostly True") : falseCount > trueCount ? (trueCount === 0 ? "False" : "Mostly False") : "Mixed";
 
         detailedClaims.push({ 
           ...claim, 
@@ -226,9 +226,14 @@ function AnalyzeContent() {
     });
   }
 
-  const isOverallTrue = overallScore > 60;
-  const isOverallMixed = overallScore >= 40 && overallScore <= 60;
-  const overallVerdictText = analyzedClaims.length === 0 ? "UNKNOWN" : isOverallTrue ? "MOSTLY TRUE" : isOverallMixed ? "MIXED" : "MOSTLY FALSE"
+  let overallVerdictText = "UNKNOWN";
+  if (analyzedClaims.length > 0) {
+    if (overallScore >= 80) overallVerdictText = "TRUE";
+    else if (overallScore > 60) overallVerdictText = "MOSTLY TRUE";
+    else if (overallScore >= 40) overallVerdictText = "MIXED";
+    else if (overallScore >= 20) overallVerdictText = "MOSTLY FALSE";
+    else overallVerdictText = "FALSE";
+  }
   const verdictStyle = getVerdictStyle(overallVerdictText)
 
   const allSources = useMemo(() => {
@@ -603,7 +608,7 @@ function AnalyzeContent() {
                     if (res?.verdict.includes("True")) trueCount++;
                     if (res?.verdict.includes("False")) falseCount++;
                   })
-                  const globalVerdict = trueCount > falseCount ? "Mostly True" : falseCount > trueCount ? "Mostly False" : "Mixed";
+                  const globalVerdict = trueCount > falseCount ? (falseCount === 0 ? "True" : "Mostly True") : falseCount > trueCount ? (trueCount === 0 ? "False" : "Mostly False") : "Mixed";
                   const mStyle = getVerdictStyle(globalVerdict);
                   
                   return (

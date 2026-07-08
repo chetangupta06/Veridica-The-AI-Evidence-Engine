@@ -114,7 +114,7 @@ export default function SettingsPage() {
                   <SelectContent>
                     <SelectItem value="anthropic/claude-3-haiku">Claude 3 Haiku</SelectItem>
                     <SelectItem value="openai/gpt-4o-mini">GPT-4o Mini</SelectItem>
-                    <SelectItem value="google/gemini-flash-1.5">Gemini 1.5 Flash</SelectItem>
+                    <SelectItem value="google/gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</SelectItem>
                     <SelectItem value="x-ai/grok-4.3">Grok</SelectItem>
                   </SelectContent>
                 </Select>
