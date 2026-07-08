@@ -18,11 +18,11 @@ import { Suspense, useEffect, useState, useMemo } from "react"
 import { extractClaims, analyzeClaim, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
 import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
 
-const MODELS = ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-pro-1.5"]
+const MODELS = ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-3.1-pro-preview"]
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "anthropic/claude-sonnet-4.5": "Claude 3.5 Sonnet",
   "openai/gpt-4o": "GPT-4o",
-  "google/gemini-pro-1.5": "Gemini 1.5 Pro",
+  "google/gemini-3.1-pro-preview": "Gemini 3.1 Pro",
   "x-ai/grok-4.3": "Grok",
 }
 
@@ -97,7 +97,7 @@ function AnalyzeContent() {
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
 
-  const activeModels = smartRouting ? ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-pro-1.5"] : selectedModels;
+  const activeModels = smartRouting ? ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-3.1-pro-preview"] : selectedModels;
 
   useEffect(() => {
     // Load settings
@@ -127,7 +127,7 @@ function AnalyzeContent() {
            if (parsed.smartRouting !== undefined) sm = parsed.smartRouting
            if (parsed.defaultModel) dm = parsed.defaultModel
         }
-        const initialModels = sm ? ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-pro-1.5"] : [dm];
+        const initialModels = sm ? ["anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-3.1-pro-preview"] : [dm];
         runFullPipeline(textToAnalyze, initialModels)
       } catch (e) {
         console.error("Failed to parse input payload", e)

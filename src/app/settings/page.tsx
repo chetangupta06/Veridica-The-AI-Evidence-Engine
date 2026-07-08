@@ -110,7 +110,7 @@ export default function SettingsPage() {
                   <SelectContent>
                     <SelectItem value="anthropic/claude-sonnet-4.5">Claude 3.5 Sonnet</SelectItem>
                     <SelectItem value="openai/gpt-4o">GPT-4o</SelectItem>
-                    <SelectItem value="google/gemini-pro-1.5">Gemini 1.5 Pro</SelectItem>
+                    <SelectItem value="google/gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
                     <SelectItem value="x-ai/grok-4.3">Grok 2</SelectItem>
                     <SelectItem value="deepseek/deepseek-chat">DeepSeek-V2</SelectItem>
                   </SelectContent>
