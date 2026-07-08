@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Activity, Settings2, Cpu, Palette } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { ArrowLeft, Save, Activity, Settings2, Cpu, Palette, Key } from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
@@ -15,6 +16,7 @@ export default function SettingsPage() {
   
   const [smartRouting, setSmartRouting] = useState(true)
   const [defaultModel, setDefaultModel] = useState("claude-3-5-sonnet")
+  const [apiKey, setApiKey] = useState("")
 
   // Avoid hydration mismatch
   useEffect(() => {
@@ -29,10 +31,15 @@ export default function SettingsPage() {
         console.error(e)
       }
     }
+    const savedKey = localStorage.getItem("veridica_api_key")
+    if (savedKey) {
+      setApiKey(savedKey)
+    }
   }, [])
 
   const handleSave = () => {
     localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, defaultModel }))
+    localStorage.setItem("veridica_api_key", apiKey)
     alert("Settings saved!")
   }
 
@@ -59,6 +66,30 @@ export default function SettingsPage() {
 
       <div className="max-w-4xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
         
+        {/* API Configuration */}
+        <Card className="border-primary/20 shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <Key className="h-5 w-5" />
+              API Configuration
+            </CardTitle>
+            <CardDescription>Configure your Mesh API key to run real analysis without fallbacks.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mesh API Key</label>
+              <Input 
+                type="password" 
+                placeholder="sk-mesh-..." 
+                value={apiKey} 
+                onChange={(e) => setApiKey(e.target.value)} 
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">Your API key is stored securely in your browser's local storage and is never sent to our servers.</p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* AI Models Section */}
         <Card className="border-primary/10 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader>

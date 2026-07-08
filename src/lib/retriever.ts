@@ -14,84 +14,49 @@ export type EvidenceSnapshot = {
   timestamp: string;
 };
 
+import { getMeshClient } from "./mesh";
+
+async function performSearchWithLLM(claim: string, model: string, agentName: "Research Agent A" | "Research Agent B"): Promise<RetrievedSource[]> {
+  const client = getMeshClient();
+  const response = await client.chat.completions.create({
+    model: model,
+    messages: [
+      {
+        role: "system",
+        content: `You are ${agentName}, a web research agent. For the given claim, search your knowledge base to retrieve 2-3 highly relevant, factual sources that provide evidence (supporting or refuting). Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), title (string), snippet (string excerpt), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json.`
+      },
+      {
+        role: "user",
+        content: `Find evidence for this claim: ${claim}`
+      }
+    ],
+    temperature: 0.3,
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) return [];
+
+  try {
+    const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
+    const parsed = JSON.parse(cleanContent);
+    return parsed.map((src: any) => ({
+      ...src,
+      retrievedBy: agentName
+    }));
+  } catch (e) {
+    console.error("Failed to parse search results from LLM", e);
+    return [];
+  }
+}
+
 // Simulated Research Agent A (Gemini)
 async function geminiSearch(claim: string): Promise<RetrievedSource[]> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // Mock results based on claim content for demo purposes
-  const sources: RetrievedSource[] = [];
-  
-  if (claim.includes("Chandrayaan-3") || claim.includes("75 million")) {
-    sources.push({
-      id: "gem-1",
-      domain: "isro.gov.in",
-      title: "Chandrayaan-3 Mission Details and Budget",
-      snippet: "The approved cost of Chandrayaan-3 is Rs. 250 Crores (excluding Launch Vehicle Cost), bringing the total to roughly $74-75 million USD.",
-      retrievedBy: "Research Agent A",
-      reliabilityScore: 98
-    });
-    sources.push({
-      id: "gem-2",
-      domain: "space.com",
-      title: "India's Moon Mission Cheaper than Interstellar",
-      snippet: "Chandrayaan-3 was famously completed for around $75 million, which is indeed less than the $165 million budget of Christopher Nolan's Interstellar.",
-      retrievedBy: "Research Agent A",
-      reliabilityScore: 85
-    });
-  } else {
-    // Generic fallback
-    sources.push({
-      id: "gem-gen-1",
-      domain: "reuters.com",
-      title: "Fact Check: Recent claims analyzed",
-      snippet: `General consensus regarding: ${claim.substring(0, 30)}... indicates mixed historical context.`,
-      retrievedBy: "Research Agent A",
-      reliabilityScore: 80
-    });
-  }
-
-  return sources;
+  return performSearchWithLLM(claim, "gemini-1.5-pro", "Research Agent A");
 }
 
 // Simulated Research Agent B (Grok)
 async function grokSearch(claim: string): Promise<RetrievedSource[]> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  const sources: RetrievedSource[] = [];
-  
-  if (claim.includes("Chandrayaan-3") || claim.includes("space debris")) {
-    // Grok finds slightly different or more edgy sources, and maybe duplicates one
-    sources.push({
-      id: "grk-1",
-      domain: "space.com",
-      title: "Chandrayaan-3 vs Interstellar Budget",
-      snippet: "Costing only 75 million USD, the mission was a fraction of a Hollywood blockbuster budget.",
-      retrievedBy: "Research Agent B",
-      reliabilityScore: 82
-    }); // This is a duplicate domain/topic to Gemini's second source
-    
-    sources.push({
-      id: "grk-2",
-      domain: "esa.int",
-      title: "Lunar Orbit Space Debris Tracking",
-      snippet: "While lunar orbit debris is a growing concern, Chandrayaan-3's propulsion module was strategically moved to a high Earth orbit to avoid creating lunar debris, contrary to some online claims.",
-      retrievedBy: "Research Agent B",
-      reliabilityScore: 95
-    });
-  } else {
-    sources.push({
-      id: "grk-gen-1",
-      domain: "apnews.com",
-      title: "Breaking down viral claims",
-      snippet: `Investigation into the claim shows conflicting data sources across major platforms.`,
-      retrievedBy: "Research Agent B",
-      reliabilityScore: 88
-    });
-  }
-
-  return sources;
+  return performSearchWithLLM(claim, "grok", "Research Agent B");
 }
 
 // Merge, Validate, and Deduplicate

@@ -143,11 +143,7 @@ function AnalyzeContent() {
     try {
       const extracted = await extractClaims(text, modelsToUse[0])
       
-      if (extracted.length > 0 && (extracted[0] as any).isMock) {
-        toast.warning("Mesh API rate limited or key invalid. Falling back to Demo Mode.");
-      } else {
-        toast.success(`Successfully extracted ${extracted.length} verifiable claims.`);
-      }
+      toast.success(`Successfully extracted ${extracted.length} verifiable claims.`);
 
       setLoadingState("retrieving")
       const claimsToAnalyze = extracted.slice(0, 5) 
@@ -192,8 +188,14 @@ function AnalyzeContent() {
         setOverallScore(0);
         toast.error("No claims found to analyze.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Pipeline error:", error)
+      if (error.message === "API_KEY_MISSING") {
+        toast.error("Mesh API Key missing. Please configure it in Settings.");
+        router.push("/settings");
+      } else {
+        toast.error("An error occurred during analysis. Check the console.");
+      }
     } finally {
       setLoadingState("done")
     }
