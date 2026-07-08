@@ -194,7 +194,7 @@ function AnalyzeContent() {
         toast.error("Mesh API Key missing. Please configure it in Settings.");
         router.push("/settings");
       } else {
-        toast.error("An error occurred during analysis. Check the console.");
+        toast.error(error.message || "An error occurred during analysis. Check the console.");
       }
     } finally {
       setLoadingState("done")
