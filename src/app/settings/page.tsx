@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ArrowLeft, Save, Activity, Settings2, Cpu, Palette, Key } from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { useEffect, useState } from "react"
 
 export default function SettingsPage() {
@@ -57,10 +58,13 @@ export default function SettingsPage() {
             </Link>
             <h1 className="font-semibold text-xl">Settings</h1>
           </div>
-          <Button onClick={handleSave} className="gap-2 bg-primary hover:bg-primary/90 transition-transform active:scale-95">
-            <Save className="h-4 w-4" />
-            Save Changes
-          </Button>
+          <div className="flex items-center gap-2 md:gap-4">
+            <ThemeToggle />
+            <Button onClick={handleSave} className="gap-2 bg-primary hover:bg-primary/90 transition-transform active:scale-95">
+              <Save className="w-4 h-4" />
+              Save Changes
+            </Button>
+          </div>
         </div>
       </header>
 

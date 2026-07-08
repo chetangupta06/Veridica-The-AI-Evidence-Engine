@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 export default function Home() {
   const router = useRouter()
@@ -49,7 +50,8 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 relative">
       {/* Top Navbar */}
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-end items-center gap-4">
+      <div className="absolute top-0 left-0 w-full p-6 flex justify-end items-center gap-2 md:gap-4">
+        <ThemeToggle />
         <AboutModal />
         <Link href="https://github.com" target="_blank" rel="noreferrer">
           <Button variant="ghost" size="icon">

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { AboutModal } from "@/components/AboutModal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -259,8 +260,9 @@ function AnalyzeContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-1 md:gap-2">
+            <ThemeToggle />
             <AboutModal />
             <Link href="https://github.com" target="_blank" rel="noreferrer">
               <Button variant="ghost" size="icon">
