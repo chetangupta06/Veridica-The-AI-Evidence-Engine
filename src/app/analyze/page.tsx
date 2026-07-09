@@ -17,7 +17,7 @@ import { AboutModal } from "@/components/AboutModal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Suspense, useEffect, useState, useMemo } from "react"
-import { extractClaims, analyzeClaim, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
+import { extractClaims, analyzeClaim, analyzeMisconception, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
 import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
 
 const MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
@@ -100,6 +100,7 @@ function AnalyzeContent() {
   const [overallScore, setOverallScore] = useState(0)
   const [ridiculousnessScore, setRidiculousnessScore] = useState(0)
   const [isHumorous, setIsHumorous] = useState(false)
+  const [misconception, setMisconception] = useState("")
 
   const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
@@ -186,9 +187,26 @@ function AnalyzeContent() {
       if (detailedClaims.length > 0) {
         let totalScore = 0;
         detailedClaims.forEach(c => {
-          totalScore += c.aggregatedVerdict === "Mostly True" ? c.aggregatedConfidence : (100 - c.aggregatedConfidence);
+          totalScore += c.aggregatedVerdict.includes("True") ? c.aggregatedConfidence : (100 - c.aggregatedConfidence);
         });
-        setOverallScore(Math.round(totalScore / detailedClaims.length));
+        const computedScore = Math.round(totalScore / detailedClaims.length);
+        setOverallScore(computedScore);
+        
+        if (computedScore <= 60) {
+          const fullSnapshot = { sources: [] as any[], context: "" };
+          detailedClaims.forEach(c => {
+            const snap = (c as any).snapshot;
+            if (snap) {
+              fullSnapshot.sources.push(...snap.sources);
+              fullSnapshot.context += "\n" + snap.context;
+            }
+          });
+          const explanation = await analyzeMisconception(text, fullSnapshot as unknown as EvidenceSnapshot, modelsToUse[0]);
+          setMisconception(explanation);
+        } else {
+          setMisconception("");
+        }
+        
         toast.success("Multi-model analysis complete.");
       } else {
         setOverallScore(0);
@@ -498,6 +516,20 @@ function AnalyzeContent() {
                     </ul>
                   </div>
                 </div>
+
+                {misconception && (
+                  <div className="px-6 py-5 bg-orange-500/5 border-t border-b border-orange-500/20 relative z-10">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-orange-500 mt-0.5 shrink-0" />
+                      <div>
+                        <h3 className="text-sm font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-2">Why People Believe This</h3>
+                        <p className="text-sm text-foreground/90 leading-relaxed font-medium">
+                          {misconception}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Footer Section */}
                 <div className="p-6 bg-muted/30 relative z-10">

@@ -123,3 +123,23 @@ export async function analyzeClaim(claim: string, snapshot: EvidenceSnapshot, se
 
   return await Promise.all(promises);
 }
+
+export async function analyzeMisconception(text: string, snapshot: EvidenceSnapshot, model: string): Promise<string> {
+  const client = getMeshClient();
+  const response = await client.chat.completions.create({
+    model: model,
+    messages: [
+      {
+        role: "system",
+        content: "You are an expert researcher. The user's input contains a claim or claims that have been determined to be partially or wholly false. Based on the provided evidence, concisely explain 'Why people believe this' (i.e. the origin of the misconception, a grain of truth that was distorted, or common confusion). Return ONLY a single paragraph of plain text explanation, nothing else."
+      },
+      {
+        role: "user",
+        content: `Original Input: ${text}\n\nEvidence Snapshot:\n${JSON.stringify(snapshot, null, 2)}`
+      }
+    ],
+    temperature: 0.3,
+  });
+
+  return response.choices[0]?.message?.content?.trim() || "Unable to determine the origin of this misconception.";
+}
