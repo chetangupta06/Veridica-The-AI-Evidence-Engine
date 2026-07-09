@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles } from "lucide-react"
+import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles, ChevronDown, Check, Plus, X, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { AboutModal } from "@/components/AboutModal"
 import { useRouter } from "next/navigation"
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { Switch } from "@/components/ui/switch"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 export default function Home() {
   const router = useRouter()
@@ -19,17 +20,38 @@ export default function Home() {
   const [urlInput, setUrlInput] = useState("")
   const [fileParsing, setFileParsing] = useState(false)
   
-  const MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
-  const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
+  const DEFAULT_DISPLAY_NAMES: Record<string, string> = {
     "anthropic/claude-3-haiku": "Claude 3 Haiku",
     "openai/gpt-4o-mini": "GPT-4o Mini",
     "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite"
   }
   
+  const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
+  const [newModelId, setNewModelId] = useState("")
+  const [newModelName, setNewModelName] = useState("")
+  const [showAddForm, setShowAddForm] = useState(false)
+  
+  // Combine default + custom models
+  const allModels = [...DEFAULT_MODELS, ...customModels.map(m => m.id)]
+  const getDisplayName = (modelId: string) => {
+    if (DEFAULT_DISPLAY_NAMES[modelId]) return DEFAULT_DISPLAY_NAMES[modelId];
+    const custom = customModels.find(m => m.id === modelId);
+    return custom?.name || modelId.split('/').pop() || modelId;
+  }
+  
   const [smartRouting, setSmartRouting] = useState(true)
-  const [selectedModels, setSelectedModels] = useState<string[]>([MODELS[0]])
+  const [selectedModels, setSelectedModels] = useState<string[]>([DEFAULT_MODELS[0]])
+  const [modelDialogOpen, setModelDialogOpen] = useState(false)
+  const [tempSelectedModels, setTempSelectedModels] = useState<string[]>([DEFAULT_MODELS[0]])
 
   useEffect(() => {
+    // Load custom models from localStorage
+    const savedModels = localStorage.getItem("veridica_custom_models")
+    if (savedModels) {
+      try { setCustomModels(JSON.parse(savedModels)) } catch (e) {}
+    }
+    
     const saved = localStorage.getItem("veridica_settings")
     if (saved) {
       try {
@@ -39,6 +61,32 @@ export default function Home() {
       } catch (e) {}
     }
   }, [])
+  
+  const addCustomModel = () => {
+    const id = newModelId.trim();
+    if (!id) return;
+    if (allModels.includes(id)) {
+      toast.error("This model already exists.");
+      return;
+    }
+    const name = newModelName.trim() || id.split('/').pop() || id;
+    const updated = [...customModels, { id, name }];
+    setCustomModels(updated);
+    localStorage.setItem("veridica_custom_models", JSON.stringify(updated));
+    setTempSelectedModels(prev => [...prev, id]);
+    setNewModelId("");
+    setNewModelName("");
+    setShowAddForm(false);
+    toast.success(`Added ${name}`);
+  }
+  
+  const removeCustomModel = (modelId: string) => {
+    const updated = customModels.filter(m => m.id !== modelId);
+    setCustomModels(updated);
+    localStorage.setItem("veridica_custom_models", JSON.stringify(updated));
+    setTempSelectedModels(prev => prev.filter(x => x !== modelId));
+    setSelectedModels(prev => prev.filter(x => x !== modelId));
+  }
 
   const handleAnalyze = (type: "text" | "url" | "file", content: string) => {
     if (!content.trim()) return;
@@ -158,29 +206,143 @@ export default function Home() {
                   Smart Routing
                 </label>
                 <span className="text-[10px] text-muted-foreground/80 font-semibold">
-                  {smartRouting ? "(Consensus Agreement Mode)" : "(Single model verification)"}
+                  {smartRouting ? "(Consensus Agreement Mode)" : "(Manual model selection)"}
                 </span>
               </div>
 
               {!smartRouting && (
-                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-1 duration-200">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-1">Select Model:</span>
-                  {MODELS.map((m) => {
-                    const active = selectedModels.includes(m);
-                    return (
+                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-1 duration-200">
+                  <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
+                    <DialogTrigger>
                       <button
-                        key={m}
-                        onClick={() => setSelectedModels([m])}
-                        className={`text-[10px] px-3 py-1.5 rounded-full border font-extrabold tracking-wide transition-all uppercase ${
-                          active
-                            ? "bg-primary/10 border-primary text-primary shadow-sm"
-                            : "bg-muted/10 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/20"
-                        }`}
+                        onClick={() => setTempSelectedModels([...selectedModels])}
+                        className="text-[11px] px-4 py-2 rounded-full border border-border/50 font-bold tracking-wide transition-all uppercase flex items-center gap-2 bg-muted/10 hover:bg-muted/20 hover:border-primary/40 text-foreground/80"
                       >
-                        {MODEL_DISPLAY_NAMES[m]}
+                        Select Models
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
-                    );
-                  })}
+                    </DialogTrigger>
+                    <DialogContent className="max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>Select AI Models</DialogTitle>
+                        <DialogDescription>
+                          Choose models for verification. Use the MESH API format: <code className="text-[10px] bg-muted/50 px-1 py-0.5 rounded">provider/model-name</code>
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-2.5 py-4 max-h-[320px] overflow-y-auto">
+                        {allModels.map((m) => {
+                          const isChecked = tempSelectedModels.includes(m);
+                          const isCustom = !DEFAULT_MODELS.includes(m);
+                          return (
+                            <button
+                              key={m}
+                              onClick={() => {
+                                if (isChecked) {
+                                  if (tempSelectedModels.length > 1) {
+                                    setTempSelectedModels(prev => prev.filter(x => x !== m));
+                                  }
+                                } else {
+                                  setTempSelectedModels(prev => [...prev, m]);
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left group ${
+                                isChecked 
+                                  ? "border-primary bg-primary/5 shadow-sm" 
+                                  : "border-border/30 bg-card hover:border-border/60"
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-bold text-foreground flex items-center gap-2">
+                                  {getDisplayName(m)}
+                                  {isCustom && (
+                                    <span className="text-[8px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider">Custom</span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-medium mt-0.5 truncate">{m}</div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {isCustom && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); removeCustomModel(m); }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/10 rounded-md"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                  </button>
+                                )}
+                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                  isChecked 
+                                    ? "bg-primary border-primary" 
+                                    : "border-border/50"
+                                }`}>
+                                  {isChecked && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Add Model Form */}
+                      {!showAddForm ? (
+                        <button
+                          onClick={() => setShowAddForm(true)}
+                          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-border/50 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-all"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Custom Model
+                        </button>
+                      ) : (
+                        <div className="space-y-3 p-4 rounded-xl border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Add Model</span>
+                            <button onClick={() => { setShowAddForm(false); setNewModelId(""); setNewModelName(""); }} className="p-1 hover:bg-muted/30 rounded-md">
+                              <X className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                          </div>
+                          <Input
+                            placeholder="provider/model-name  (e.g. mistralai/mistral-7b)"
+                            value={newModelId}
+                            onChange={(e) => setNewModelId(e.target.value)}
+                            className="text-sm h-9"
+                          />
+                          <Input
+                            placeholder="Display name (optional)"
+                            value={newModelName}
+                            onChange={(e) => setNewModelName(e.target.value)}
+                            className="text-sm h-9"
+                          />
+                          <Button
+                            onClick={addCustomModel}
+                            disabled={!newModelId.trim()}
+                            size="sm"
+                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-9 text-xs"
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-1.5" />
+                            Add Model
+                          </Button>
+                        </div>
+                      )}
+                      
+                      <Button
+                        onClick={() => {
+                          setSelectedModels([...tempSelectedModels]);
+                          setModelDialogOpen(false);
+                          setShowAddForm(false);
+                        }}
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-11 mt-2"
+                      >
+                        Confirm ({tempSelectedModels.length} {tempSelectedModels.length === 1 ? "model" : "models"})
+                      </Button>
+                    </DialogContent>
+                  </Dialog>
+                  
+                  <div className="flex gap-1.5">
+                    {selectedModels.map(m => (
+                      <span key={m} className="text-[9px] px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-extrabold uppercase tracking-wider">
+                        {getDisplayName(m)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
               
@@ -227,29 +389,143 @@ export default function Home() {
                   Smart Routing
                 </label>
                 <span className="text-[10px] text-muted-foreground/80 font-semibold">
-                  {smartRouting ? "(Consensus Agreement Mode)" : "(Single model verification)"}
+                  {smartRouting ? "(Consensus Agreement Mode)" : "(Manual model selection)"}
                 </span>
               </div>
 
               {!smartRouting && (
-                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-1 duration-200">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-1">Select Model:</span>
-                  {MODELS.map((m) => {
-                    const active = selectedModels.includes(m);
-                    return (
+                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-1 duration-200">
+                  <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
+                    <DialogTrigger>
                       <button
-                        key={m}
-                        onClick={() => setSelectedModels([m])}
-                        className={`text-[10px] px-3 py-1.5 rounded-full border font-extrabold tracking-wide transition-all uppercase ${
-                          active
-                            ? "bg-primary/10 border-primary text-primary shadow-sm"
-                            : "bg-muted/10 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/20"
-                        }`}
+                        onClick={() => setTempSelectedModels([...selectedModels])}
+                        className="text-[11px] px-4 py-2 rounded-full border border-border/50 font-bold tracking-wide transition-all uppercase flex items-center gap-2 bg-muted/10 hover:bg-muted/20 hover:border-primary/40 text-foreground/80"
                       >
-                        {MODEL_DISPLAY_NAMES[m]}
+                        Select Models
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
-                    );
-                  })}
+                    </DialogTrigger>
+                    <DialogContent className="max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>Select AI Models</DialogTitle>
+                        <DialogDescription>
+                          Choose models for verification. Use the MESH API format: <code className="text-[10px] bg-muted/50 px-1 py-0.5 rounded">provider/model-name</code>
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-2.5 py-4 max-h-[320px] overflow-y-auto">
+                        {allModels.map((m) => {
+                          const isChecked = tempSelectedModels.includes(m);
+                          const isCustom = !DEFAULT_MODELS.includes(m);
+                          return (
+                            <button
+                              key={m}
+                              onClick={() => {
+                                if (isChecked) {
+                                  if (tempSelectedModels.length > 1) {
+                                    setTempSelectedModels(prev => prev.filter(x => x !== m));
+                                  }
+                                } else {
+                                  setTempSelectedModels(prev => [...prev, m]);
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left group ${
+                                isChecked 
+                                  ? "border-primary bg-primary/5 shadow-sm" 
+                                  : "border-border/30 bg-card hover:border-border/60"
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-bold text-foreground flex items-center gap-2">
+                                  {getDisplayName(m)}
+                                  {isCustom && (
+                                    <span className="text-[8px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider">Custom</span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-medium mt-0.5 truncate">{m}</div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {isCustom && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); removeCustomModel(m); }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/10 rounded-md"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                  </button>
+                                )}
+                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                  isChecked 
+                                    ? "bg-primary border-primary" 
+                                    : "border-border/50"
+                                }`}>
+                                  {isChecked && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Add Model Form */}
+                      {!showAddForm ? (
+                        <button
+                          onClick={() => setShowAddForm(true)}
+                          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-border/50 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-all"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Custom Model
+                        </button>
+                      ) : (
+                        <div className="space-y-3 p-4 rounded-xl border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Add Model</span>
+                            <button onClick={() => { setShowAddForm(false); setNewModelId(""); setNewModelName(""); }} className="p-1 hover:bg-muted/30 rounded-md">
+                              <X className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                          </div>
+                          <Input
+                            placeholder="provider/model-name  (e.g. mistralai/mistral-7b)"
+                            value={newModelId}
+                            onChange={(e) => setNewModelId(e.target.value)}
+                            className="text-sm h-9"
+                          />
+                          <Input
+                            placeholder="Display name (optional)"
+                            value={newModelName}
+                            onChange={(e) => setNewModelName(e.target.value)}
+                            className="text-sm h-9"
+                          />
+                          <Button
+                            onClick={addCustomModel}
+                            disabled={!newModelId.trim()}
+                            size="sm"
+                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-9 text-xs"
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-1.5" />
+                            Add Model
+                          </Button>
+                        </div>
+                      )}
+                      
+                      <Button
+                        onClick={() => {
+                          setSelectedModels([...tempSelectedModels]);
+                          setModelDialogOpen(false);
+                          setShowAddForm(false);
+                        }}
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-11 mt-2"
+                      >
+                        Confirm ({tempSelectedModels.length} {tempSelectedModels.length === 1 ? "model" : "models"})
+                      </Button>
+                    </DialogContent>
+                  </Dialog>
+                  
+                  <div className="flex gap-1.5">
+                    {selectedModels.map(m => (
+                      <span key={m} className="text-[9px] px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-extrabold uppercase tracking-wider">
+                        {getDisplayName(m)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
               
