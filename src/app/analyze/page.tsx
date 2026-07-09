@@ -137,15 +137,22 @@ function AnalyzeContent() {
   const [inputCollapsed, setInputCollapsed] = useState(false)
   const [expandedClaims, setExpandedClaims] = useState<Record<number, boolean>>({})
   const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>({})
+  const [sourceExtractorModel, setSourceExtractorModel] = useState("openai/gpt-4o-mini")
 
   const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
   useEffect(() => {
     // Load custom models from localStorage
+    let loadedCustomModels: { id: string; name: string }[] = [];
     const savedModels = localStorage.getItem("veridica_custom_models")
     if (savedModels) {
-      try { setCustomModels(JSON.parse(savedModels)) } catch (e) {}
+      try { 
+        loadedCustomModels = JSON.parse(savedModels);
+        setCustomModels(loadedCustomModels) 
+      } catch (e) {}
     }
+    
+    const validIds = [...DEFAULT_MODELS, ...loadedCustomModels.map(m => m.id)];
     
     // Load settings
     const saved = localStorage.getItem("veridica_settings")
@@ -154,6 +161,7 @@ function AnalyzeContent() {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
         if (parsed.defaultModel) setSelectedModels([parsed.defaultModel])
+        if (parsed.sourceExtractorModel) setSourceExtractorModel(parsed.sourceExtractorModel)
       } catch(e) {}
     }
 
@@ -170,13 +178,18 @@ function AnalyzeContent() {
         let sm = true; 
         let dm = DEFAULT_MODELS[0];
         let modelsList = [dm];
+        let extractor = "openai/gpt-4o-mini";
         
         if (saved) {
            const parsed = JSON.parse(saved)
            if (parsed.smartRouting !== undefined) sm = parsed.smartRouting
-           if (parsed.defaultModel) {
+           if (parsed.defaultModel && validIds.includes(parsed.defaultModel)) {
              dm = parsed.defaultModel
              modelsList = [dm]
+           }
+           if (parsed.sourceExtractorModel) {
+             extractor = parsed.sourceExtractorModel;
+             setSourceExtractorModel(extractor);
            }
         }
         
@@ -186,15 +199,17 @@ function AnalyzeContent() {
           sm = payload.smartRouting
         }
         if (payload.selectedModels && payload.selectedModels.length > 0) {
-          setSelectedModels(payload.selectedModels)
-          modelsList = payload.selectedModels
+          const scrubbedModels = payload.selectedModels.filter((m: string) => validIds.includes(m));
+          const finalModels = scrubbedModels.length > 0 ? scrubbedModels : [DEFAULT_MODELS[0]];
+          setSelectedModels(finalModels)
+          modelsList = finalModels
         }
 
         const initialModels = sm 
           ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] 
           : modelsList;
           
-        runFullPipeline(textToAnalyze, initialModels)
+        runFullPipeline(textToAnalyze, initialModels, extractor)
       } catch (e) {
         console.error("Failed to parse input payload", e)
       }
@@ -203,7 +218,7 @@ function AnalyzeContent() {
     }
   }, []) // eslint-disable-line
 
-  const runFullPipeline = async (text: string, modelsToUse: string[]) => {
+  const runFullPipeline = async (text: string, modelsToUse: string[], extractorModel: string) => {
     setLoadingState("extracting")
     try {
       const result = await extractClaims(text, modelsToUse)
@@ -218,7 +233,7 @@ function AnalyzeContent() {
       const detailedClaims: ClaimAnalysis[] = []
       
       for (const claim of claimsToAnalyze) {
-        const snapshot = await gatherEvidence(claim.text)
+        const snapshot = await gatherEvidence(claim.text, extractorModel)
         
         setLoadingState("analyzing") // Switch state as we pass to models
         const results = await analyzeClaim(claim.text, snapshot, modelsToUse)
@@ -433,7 +448,7 @@ function AnalyzeContent() {
                   <div className="border-t mt-2 pt-2 text-right">
                     <Button size="sm" className="w-full" onClick={() => {
                        setDropdownOpen(false)
-                       if (originalInput) runFullPipeline(originalInput, selectedModels)
+                       if (originalInput) runFullPipeline(originalInput, selectedModels, sourceExtractorModel)
                     }}>Apply & Run</Button>
                   </div>
                 </div>

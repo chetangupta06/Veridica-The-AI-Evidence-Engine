@@ -50,14 +50,44 @@ async function performSearchWithLLM(claim: string, model: string, agentName: "Re
   }
 }
 
-// Simulated Research Agent A (Gemini)
-async function geminiSearch(claim: string): Promise<RetrievedSource[]> {
-  return performSearchWithLLM(claim, "google/gemini-3.1-flash-lite", "Research Agent A");
+// Simulated Research Agent A
+async function researchAgentA(claim: string, model: string): Promise<RetrievedSource[]> {
+  return performSearchWithLLM(claim, model, "Research Agent A");
 }
 
-// Simulated Research Agent B (Grok)
-async function grokSearch(claim: string): Promise<RetrievedSource[]> {
-  return performSearchWithLLM(claim, "x-ai/grok-4.3", "Research Agent B");
+// Simulated Research Agent B
+async function researchAgentB(claim: string, model: string): Promise<RetrievedSource[]> {
+  // Use a slightly different prompt nuance or temperature to simulate diverse search
+  const client = getMeshClient();
+  const response = await client.chat.completions.create({
+    model: model,
+    messages: [
+      {
+        role: "system",
+        content: `You are Research Agent B, a meticulous web research agent. For the given claim, search your knowledge base to retrieve 2-3 highly relevant, factual sources that provide evidence (supporting or refuting). Prioritize different sources than an average search might yield to ensure broad coverage. Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), url (string absolute URL), title (string), snippet (string excerpt), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json.`
+      },
+      {
+        role: "user",
+        content: `Find evidence for this claim: ${claim}`
+      }
+    ],
+    temperature: 0.5, // slightly higher temp for variety
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) return [];
+
+  try {
+    const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
+    const parsed = JSON.parse(cleanContent);
+    return parsed.map((src: any) => ({
+      ...src,
+      retrievedBy: "Research Agent B"
+    }));
+  } catch (e) {
+    console.error("Failed to parse search results from Agent B", e);
+    return [];
+  }
 }
 
 // Merge, Validate, and Deduplicate
@@ -90,16 +120,16 @@ function mergeAndValidateSources(geminiSources: RetrievedSource[], grokSources: 
 }
 
 // Main Pipeline Entrypoint
-export async function gatherEvidence(claim: string): Promise<EvidenceSnapshot> {
+export async function gatherEvidence(claim: string, extractorModel: string = "openai/gpt-4o-mini"): Promise<EvidenceSnapshot> {
   try {
-    // 1. Run Research Agents in parallel
-    const [geminiResults, grokResults] = await Promise.all([
-      geminiSearch(claim),
-      grokSearch(claim)
+    // 1. Run Research Agents in parallel using the user's chosen extractor model
+    const [agentAResults, agentBResults] = await Promise.all([
+      researchAgentA(claim, extractorModel),
+      researchAgentB(claim, extractorModel)
     ]);
 
     // 2. Source Validation & Deduplication
-    const finalSources = mergeAndValidateSources(geminiResults, grokResults);
+    const finalSources = mergeAndValidateSources(agentAResults, agentBResults);
 
     // 3. Compile Evidence Snapshot (Structured JSON format)
     const snapshot: EvidenceSnapshot = {

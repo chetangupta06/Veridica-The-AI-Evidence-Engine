@@ -17,7 +17,9 @@ export default function SettingsPage() {
   
   const [smartRouting, setSmartRouting] = useState(true)
   const [defaultModel, setDefaultModel] = useState("anthropic/claude-3-haiku")
+  const [sourceExtractorModel, setSourceExtractorModel] = useState("openai/gpt-4o-mini")
   const [apiKey, setApiKey] = useState("")
+  const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
 
   // Avoid hydration mismatch
   useEffect(() => {
@@ -28,6 +30,7 @@ export default function SettingsPage() {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
         if (parsed.defaultModel) setDefaultModel(parsed.defaultModel)
+        if (parsed.sourceExtractorModel) setSourceExtractorModel(parsed.sourceExtractorModel)
       } catch(e) {
         console.error(e)
       }
@@ -36,10 +39,15 @@ export default function SettingsPage() {
     if (savedKey) {
       setApiKey(savedKey)
     }
+    
+    const savedCustom = localStorage.getItem("veridica_custom_models")
+    if (savedCustom) {
+      try { setCustomModels(JSON.parse(savedCustom)) } catch (e) {}
+    }
   }, [])
 
   const handleSave = () => {
-    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, defaultModel }))
+    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, defaultModel, sourceExtractorModel }))
     localStorage.setItem("veridica_api_key", apiKey)
     alert("Settings saved!")
   }
@@ -116,6 +124,9 @@ export default function SettingsPage() {
                     <SelectItem value="openai/gpt-4o-mini">GPT-4o Mini</SelectItem>
                     <SelectItem value="google/gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</SelectItem>
                     <SelectItem value="x-ai/grok-4.3">Grok</SelectItem>
+                    {customModels.map(m => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">The primary model used when Smart Routing is disabled.</p>
@@ -135,6 +146,27 @@ export default function SettingsPage() {
                 </Select>
                 <p className="text-xs text-muted-foreground">Deep reasoning takes longer but provides better accuracy.</p>
               </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                Source Extractor AI
+              </label>
+              <Select value={sourceExtractorModel} onValueChange={(val) => { if(val) setSourceExtractorModel(val) }}>
+                <SelectTrigger className="w-full md:w-1/2">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="anthropic/claude-3-haiku">Claude 3 Haiku</SelectItem>
+                  <SelectItem value="openai/gpt-4o-mini">GPT-4o Mini</SelectItem>
+                  <SelectItem value="google/gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</SelectItem>
+                  <SelectItem value="x-ai/grok-4.3">Grok</SelectItem>
+                  {customModels.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">The AI model used by the Research Agents to fetch and deduplicate initial sources.</p>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-muted/40 rounded-lg border">

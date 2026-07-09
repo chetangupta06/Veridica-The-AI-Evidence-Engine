@@ -47,17 +47,29 @@ export default function Home() {
 
   useEffect(() => {
     // Load custom models from localStorage
+    let loadedCustomModels: { id: string; name: string }[] = [];
     const savedModels = localStorage.getItem("veridica_custom_models")
     if (savedModels) {
-      try { setCustomModels(JSON.parse(savedModels)) } catch (e) {}
+      try { 
+        loadedCustomModels = JSON.parse(savedModels);
+        setCustomModels(loadedCustomModels) 
+      } catch (e) {}
     }
     
+    const validIds = [...DEFAULT_MODELS, ...loadedCustomModels.map(m => m.id)];
+
     const saved = localStorage.getItem("veridica_settings")
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
-        if (parsed.defaultModel) setSelectedModels([parsed.defaultModel])
+        
+        // Scrub default model to ensure it still exists
+        if (parsed.defaultModel && validIds.includes(parsed.defaultModel)) {
+          setSelectedModels([parsed.defaultModel])
+        } else {
+          setSelectedModels([DEFAULT_MODELS[0]])
+        }
       } catch (e) {}
     }
   }, [])
