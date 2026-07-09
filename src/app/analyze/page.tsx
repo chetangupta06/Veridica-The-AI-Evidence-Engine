@@ -20,8 +20,8 @@ import React, { Suspense, useEffect, useState, useMemo, Fragment } from "react"
 import { extractClaims, analyzeClaim, analyzeMisconception, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
 import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
 
-const MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
-const MODEL_DISPLAY_NAMES: Record<string, string> = {
+const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
+const DEFAULT_DISPLAY_NAMES: Record<string, string> = {
   "anthropic/claude-3-haiku": "Claude 3 Haiku",
   "openai/gpt-4o-mini": "GPT-4o Mini",
   "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite",
@@ -107,8 +107,17 @@ const HeatmapText = ({ text, claims }: { text: string, claims: ClaimAnalysis[] }
 function AnalyzeContent() {
   const router = useRouter()
   const [smartRouting, setSmartRouting] = useState(true)
-  const [selectedModels, setSelectedModels] = useState<string[]>([MODELS[0]])
+  const [selectedModels, setSelectedModels] = useState<string[]>([DEFAULT_MODELS[0]])
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  
+  // Custom models from localStorage
+  const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
+  const allModels = [...DEFAULT_MODELS, ...customModels.map(m => m.id)]
+  const getDisplayName = (modelId: string) => {
+    if (DEFAULT_DISPLAY_NAMES[modelId]) return DEFAULT_DISPLAY_NAMES[modelId];
+    const custom = customModels.find(m => m.id === modelId);
+    return custom?.name || modelId.split('/').pop() || modelId;
+  }
   
   const [originalInput, setOriginalInput] = useState("")
   const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "retrieving" | "analyzing" | "done">("idle")
@@ -132,6 +141,12 @@ function AnalyzeContent() {
   const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
   useEffect(() => {
+    // Load custom models from localStorage
+    const savedModels = localStorage.getItem("veridica_custom_models")
+    if (savedModels) {
+      try { setCustomModels(JSON.parse(savedModels)) } catch (e) {}
+    }
+    
     // Load settings
     const saved = localStorage.getItem("veridica_settings")
     if (saved) {
@@ -153,7 +168,7 @@ function AnalyzeContent() {
         setOriginalInput(textToAnalyze)
         // Check if payload specified custom routing and models.
         let sm = true; 
-        let dm = MODELS[0];
+        let dm = DEFAULT_MODELS[0];
         let modelsList = [dm];
         
         if (saved) {
@@ -390,12 +405,12 @@ function AnalyzeContent() {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className={`min-w-[180px] justify-between ${smartRouting ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                {selectedModels.length === 1 ? (MODEL_DISPLAY_NAMES[selectedModels[0]] || selectedModels[0]) : `${selectedModels.length} Models Selected`}
+                {selectedModels.length === 1 ? (getDisplayName(selectedModels[0]) || selectedModels[0]) : `${selectedModels.length} Models Selected`}
                 <ChevronDown className="w-4 h-4 ml-2 opacity-50" />
               </Button>
               {dropdownOpen && (
                 <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-primary/20 rounded-md shadow-xl z-50 p-2 flex flex-col gap-1">
-                  {MODELS.map(m => (
+                  {allModels.map(m => (
                     <label key={m} className="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer text-sm font-medium transition-colors">
                       <input 
                         type="checkbox" 
@@ -412,7 +427,7 @@ function AnalyzeContent() {
                           setSelectedModels(newModels)
                         }}
                       />
-                      {MODEL_DISPLAY_NAMES[m] || m}
+                      {getDisplayName(m)}
                     </label>
                   ))}
                   <div className="border-t mt-2 pt-2 text-right">
@@ -441,7 +456,7 @@ function AnalyzeContent() {
             </h2>
             <p className="text-muted-foreground text-lg">
               {loadingState === "retrieving" && "Simulating Gemini & Grok Searches, removing duplicates, and generating Evidence Snapshot..."}
-              {loadingState === "analyzing" && (smartRouting ? `Using ${activeModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}` : `Using ${selectedModels.map(m => MODEL_DISPLAY_NAMES[m]).join(", ")}`)}
+              {loadingState === "analyzing" && (smartRouting ? `Using ${activeModels.map(m => getDisplayName(m)).join(", ")}` : `Using ${selectedModels.map(m => getDisplayName(m)).join(", ")}`)}
             </p>
           </div>
         )}
@@ -782,7 +797,7 @@ function AnalyzeContent() {
                                           <div key={res.model} className="p-4 border border-border/30 rounded-xl bg-muted/10 flex flex-col justify-between">
                                             <div>
                                               <div className="flex items-center justify-between mb-2">
-                                                <span className="font-semibold text-xs text-foreground/80">{MODEL_DISPLAY_NAMES[res.model] || res.model}</span>
+                                                <span className="font-semibold text-xs text-foreground/80">{getDisplayName(res.model)}</span>
                                                 <span className={`text-xs font-extrabold ${mStyle.color}`}>{res.verdict}</span>
                                               </div>
                                               <p className="text-xs text-[#9CA3AF] mb-2 leading-relaxed line-clamp-6">
@@ -795,7 +810,7 @@ function AnalyzeContent() {
                                                   </DialogTrigger>
                                                   <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                                                     <DialogHeader>
-                                                      <DialogTitle>{MODEL_DISPLAY_NAMES[res.model] || res.model} Analysis</DialogTitle>
+                                                      <DialogTitle>{getDisplayName(res.model)} Analysis</DialogTitle>
                                                       <DialogDescription>
                                                         Detailed explanation of this claim analysis.
                                                       </DialogDescription>
@@ -893,7 +908,7 @@ function AnalyzeContent() {
                             return (
                               <React.Fragment key={model}>
                                 <tr className="hover:bg-muted/5 transition-colors">
-                                  <td className="px-6 py-4 font-bold text-foreground">{MODEL_DISPLAY_NAMES[model]}</td>
+                                  <td className="px-6 py-4 font-bold text-foreground">{getDisplayName(model)}</td>
                                   <td className="px-6 py-4">
                                     <span className={`text-xs font-extrabold ${mStyle.color}`}>{globalVerdict}</span>
                                   </td>
@@ -969,7 +984,7 @@ function AnalyzeContent() {
                   
                   return (
                     <div key={model} className="flex justify-between items-center text-sm">
-                      <span>{MODEL_DISPLAY_NAMES[model]}</span>
+                      <span>{getDisplayName(model)}</span>
                       <Badge variant="outline" className={`${mStyle.color} ${mStyle.border}`}>
                         {globalVerdict}
                       </Badge>
