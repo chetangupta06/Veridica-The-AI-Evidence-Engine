@@ -7,22 +7,49 @@ import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles } fr
 import Link from "next/link"
 import { AboutModal } from "@/components/AboutModal"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { Switch } from "@/components/ui/switch"
 
 export default function Home() {
   const router = useRouter()
   const [claimText, setClaimText] = useState("")
   const [urlInput, setUrlInput] = useState("")
   const [fileParsing, setFileParsing] = useState(false)
+  
+  const MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
+  const MODEL_DISPLAY_NAMES: Record<string, string> = {
+    "anthropic/claude-3-haiku": "Claude 3 Haiku",
+    "openai/gpt-4o-mini": "GPT-4o Mini",
+    "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite"
+  }
+  
+  const [smartRouting, setSmartRouting] = useState(true)
+  const [selectedModels, setSelectedModels] = useState<string[]>([MODELS[0]])
+
+  useEffect(() => {
+    const saved = localStorage.getItem("veridica_settings")
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
+        if (parsed.defaultModel) setSelectedModels([parsed.defaultModel])
+      } catch (e) {}
+    }
+  }, [])
 
   const handleAnalyze = (type: "text" | "url" | "file", content: string) => {
     if (!content.trim()) return;
 
     // Save to session storage
-    sessionStorage.setItem("veridica_input", JSON.stringify({ type, content }))
+    sessionStorage.setItem("veridica_input", JSON.stringify({ 
+      type, 
+      content,
+      smartRouting,
+      selectedModels
+    }))
     
     toast.success("Claim loaded. Route established to Mesh API.");
     // Navigate to analyze page
@@ -97,10 +124,10 @@ export default function Home() {
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="text" className="mt-0 flex flex-col h-[200px]">
+          <TabsContent value="text" className="mt-0 flex flex-col h-auto">
             <Textarea
               placeholder="E.g., 'Coffee stunts your growth' or 'Electric cars produce more emissions over their lifetime than gas cars...'"
-              className="flex-1 text-lg resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent p-4"
+              className="flex-1 min-h-[120px] text-lg resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent p-4"
               value={claimText}
               onChange={(e) => setClaimText(e.target.value)}
             />
@@ -118,10 +145,56 @@ export default function Home() {
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </div>
+
+            {/* Smart Routing & Model Selection */}
+            <div className="border-t border-border/30 pt-4 pb-2 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/5 rounded-b-xl">
+              <div className="flex items-center gap-3">
+                <Switch 
+                  id="smart-routing-text" 
+                  checked={smartRouting} 
+                  onCheckedChange={(checked) => setSmartRouting(checked)} 
+                />
+                <label htmlFor="smart-routing-text" className="text-xs font-bold text-foreground/85 cursor-pointer uppercase tracking-wider select-none">
+                  Smart Routing
+                </label>
+                <span className="text-[10px] text-muted-foreground/80 font-semibold">
+                  {smartRouting ? "(Consensus Agreement Mode)" : "(Single model verification)"}
+                </span>
+              </div>
+
+              {!smartRouting && (
+                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-1 duration-200">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-1">Select Model:</span>
+                  {MODELS.map((m) => {
+                    const active = selectedModels.includes(m);
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => setSelectedModels([m])}
+                        className={`text-[10px] px-3 py-1.5 rounded-full border font-extrabold tracking-wide transition-all uppercase ${
+                          active
+                            ? "bg-primary/10 border-primary text-primary shadow-sm"
+                            : "bg-muted/10 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                        }`}
+                      >
+                        {MODEL_DISPLAY_NAMES[m]}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              
+              {smartRouting && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/85 font-semibold animate-in fade-in slide-in-from-left-1 duration-200">
+                  <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span>Consensus on GPT, Claude & Gemini</span>
+                </div>
+              )}
+            </div>
           </TabsContent>
 
-          <TabsContent value="url" className="mt-0 flex flex-col h-[200px]">
-            <div className="flex-1 p-4 flex items-center justify-center">
+          <TabsContent value="url" className="mt-0 flex flex-col h-auto">
+            <div className="flex-1 p-4 flex items-center justify-center min-h-[100px]">
               <Input 
                 type="url" 
                 placeholder="https://example.com/article" 
@@ -140,6 +213,52 @@ export default function Home() {
                 Analyze URL
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
+            </div>
+
+            {/* Smart Routing & Model Selection */}
+            <div className="border-t border-border/30 pt-4 pb-2 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/5 rounded-b-xl">
+              <div className="flex items-center gap-3">
+                <Switch 
+                  id="smart-routing-url" 
+                  checked={smartRouting} 
+                  onCheckedChange={(checked) => setSmartRouting(checked)} 
+                />
+                <label htmlFor="smart-routing-url" className="text-xs font-bold text-foreground/85 cursor-pointer uppercase tracking-wider select-none">
+                  Smart Routing
+                </label>
+                <span className="text-[10px] text-muted-foreground/80 font-semibold">
+                  {smartRouting ? "(Consensus Agreement Mode)" : "(Single model verification)"}
+                </span>
+              </div>
+
+              {!smartRouting && (
+                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-1 duration-200">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-1">Select Model:</span>
+                  {MODELS.map((m) => {
+                    const active = selectedModels.includes(m);
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => setSelectedModels([m])}
+                        className={`text-[10px] px-3 py-1.5 rounded-full border font-extrabold tracking-wide transition-all uppercase ${
+                          active
+                            ? "bg-primary/10 border-primary text-primary shadow-sm"
+                            : "bg-muted/10 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                        }`}
+                      >
+                        {MODEL_DISPLAY_NAMES[m]}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              
+              {smartRouting && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/85 font-semibold animate-in fade-in slide-in-from-left-1 duration-200">
+                  <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span>Consensus on GPT, Claude & Gemini</span>
+                </div>
+              )}
             </div>
           </TabsContent>
 

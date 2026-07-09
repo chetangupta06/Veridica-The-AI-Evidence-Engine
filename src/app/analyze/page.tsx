@@ -10,13 +10,13 @@ import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Brain } from "lucide-react"
+import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, ChevronUp, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Brain, Check, FileText, Database, Activity, Award, Image } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { AboutModal } from "@/components/AboutModal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Suspense, useEffect, useState, useMemo } from "react"
+import React, { Suspense, useEffect, useState, useMemo, Fragment } from "react"
 import { extractClaims, analyzeClaim, analyzeMisconception, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
 import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
 
@@ -35,6 +35,26 @@ const getVerdictStyle = (verdict: string) => {
   if (v.includes("false")) return { color: "text-red-500", bg: "bg-red-500/10", border: "border-red-500/30", indicator: "bg-red-500", icon: <XCircle className="w-4 h-4 mr-1 inline" /> };
   return { color: "text-gray-500", bg: "bg-gray-500/10", border: "border-gray-500/30", indicator: "bg-gray-500", icon: <AlertTriangle className="w-4 h-4 mr-1 inline" /> };
 }
+
+const SegmentedBar = ({ value, activeColor = "bg-primary" }: { value: number; activeColor?: string }) => {
+  const filledCount = Math.round(value / 10);
+  return (
+    <div className="flex gap-0.5 items-center shrink-0">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div 
+          key={i} 
+          className={`h-2 w-2 rounded-[2px] transition-all duration-700 ease-out ${
+            i < filledCount 
+              ? activeColor 
+              : "bg-muted/30 dark:bg-muted/10"
+          }`}
+        />
+      ))}
+      <span className="text-[10px] font-mono font-bold ml-1.5 text-muted-foreground w-8 text-right shrink-0">{value}%</span>
+    </div>
+  );
+};
+
 
 const HeatmapText = ({ text, claims }: { text: string, claims: ClaimAnalysis[] }) => {
   if (claims.length === 0) return <p className="text-lg leading-relaxed text-muted-foreground">{text}</p>;
@@ -102,6 +122,12 @@ function AnalyzeContent() {
   const [isHumorous, setIsHumorous] = useState(false)
   const [misconception, setMisconception] = useState("")
   const [isMisconceptionExpanded, setIsMisconceptionExpanded] = useState(true)
+  
+  // Redesign state variables
+  const [activeTab, setActiveTab] = useState<"overview" | "claims" | "sources" | "consensus">("overview")
+  const [inputCollapsed, setInputCollapsed] = useState(false)
+  const [expandedClaims, setExpandedClaims] = useState<Record<number, boolean>>({})
+  const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>({})
 
   const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
@@ -125,15 +151,34 @@ function AnalyzeContent() {
           textToAnalyze = `[Fetched from URL: ${payload.content}] Coffee stunts your growth and decreases bone density. Caffeine can cause temporary spikes in blood pressure.` 
         }
         setOriginalInput(textToAnalyze)
-        // Note: we use activeModels here based on initial state, but state might not have updated yet.
-        // For robustness, we read localStorage again here.
-        let sm = true; let dm = MODELS[0];
+        // Check if payload specified custom routing and models.
+        let sm = true; 
+        let dm = MODELS[0];
+        let modelsList = [dm];
+        
         if (saved) {
            const parsed = JSON.parse(saved)
            if (parsed.smartRouting !== undefined) sm = parsed.smartRouting
-           if (parsed.defaultModel) dm = parsed.defaultModel
+           if (parsed.defaultModel) {
+             dm = parsed.defaultModel
+             modelsList = [dm]
+           }
         }
-        const initialModels = sm ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : [dm];
+        
+        // Override with payload routing/models if provided
+        if (payload.smartRouting !== undefined) {
+          setSmartRouting(payload.smartRouting)
+          sm = payload.smartRouting
+        }
+        if (payload.selectedModels && payload.selectedModels.length > 0) {
+          setSelectedModels(payload.selectedModels)
+          modelsList = payload.selectedModels
+        }
+
+        const initialModels = sm 
+          ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] 
+          : modelsList;
+          
         runFullPipeline(textToAnalyze, initialModels)
       } catch (e) {
         console.error("Failed to parse input payload", e)
@@ -209,6 +254,7 @@ function AnalyzeContent() {
         }
         
         toast.success("Multi-model analysis complete.");
+        setInputCollapsed(true);
       } else {
         setOverallScore(0);
         toast.error("No claims found to analyze.");
@@ -272,6 +318,27 @@ function AnalyzeContent() {
     });
     return Array.from(sourcesMap.values());
   }, [analyzedClaims])
+
+  const trustMetrics = useMemo(() => {
+    if (analyzedClaims.length === 0) return { consensus: 0, quality: 0, consistency: 0 };
+    
+    let agreeCount = 0;
+    analyzedClaims.forEach(c => {
+      let trueVotes = 0; let falseVotes = 0;
+      c.modelResults.forEach(r => {
+        if (r.verdict.includes("True")) trueVotes++;
+        if (r.verdict.includes("False")) falseVotes++;
+      });
+      agreeCount += Math.max(trueVotes, falseVotes) / (c.modelResults.length || 1);
+    });
+    
+    const consensus = Math.round((agreeCount / analyzedClaims.length) * 100);
+    const quality = allSources.length > 0 ? Math.round(allSources.reduce((acc, s) => acc + s.reliabilityScore, 0) / allSources.length) : 0;
+    const consistency = Math.round(analyzedClaims.reduce((acc, c) => acc + c.aggregatedConfidence, 0) / (analyzedClaims.length || 1));
+    
+    return { consensus, quality, consistency };
+  }, [analyzedClaims, allSources]);
+
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -381,27 +448,42 @@ function AnalyzeContent() {
 
         {/* Left Sidebar */}
         {leftSidebarOpen ? (
-          <div className="w-80 border-r bg-muted/20 flex flex-col hidden lg:flex transition-all">
+          <div className="w-72 border-r bg-muted/10 flex flex-col hidden lg:flex transition-all">
             <div className="p-4 border-b">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-sm text-muted-foreground">ORIGINAL INPUT</h3>
-                <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2" onClick={() => setLeftSidebarOpen(false)}>
-                  <PanelLeftClose className="w-4 h-4 text-muted-foreground" />
-                </Button>
-              </div>
-              <div className="text-sm bg-card p-3 rounded-md border shadow-sm max-h-[150px] overflow-y-auto">
-                "{originalInput}"
+              <button 
+                onClick={() => setInputCollapsed(!inputCollapsed)}
+                className="flex items-center justify-between w-full mb-2 hover:opacity-85 transition-opacity text-left"
+              >
+                <h3 className="font-semibold text-xs text-muted-foreground tracking-wider uppercase">Original Input</h3>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground/80 font-medium">
+                    {inputCollapsed ? "Show" : "Hide"}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground/80 transition-transform duration-200 ${inputCollapsed ? "" : "rotate-180"}`} />
+                </div>
+              </button>
+              
+              {!inputCollapsed && (
+                <div className="text-sm bg-card p-3 rounded-xl border shadow-sm max-h-[150px] overflow-y-auto font-medium text-foreground/90 animate-in fade-in slide-in-from-top-1 duration-200">
+                  "{originalInput}"
+                </div>
+              )}
+
+              {/* Multimodal Preview placeholder */}
+              <div className="mt-3 border border-dashed border-muted-foreground/20 rounded-xl p-3 bg-muted/5 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <Image className="w-4 h-4 text-muted-foreground/60" />
+                <span>No Image Uploaded</span>
               </div>
             </div>
             
             <div className="p-4 flex-1 flex flex-col min-h-0">
-              <h3 className="font-semibold text-sm text-muted-foreground mb-4">EXTRACTED CLAIMS ({analyzedClaims.length})</h3>
+              <h3 className="font-semibold text-xs text-muted-foreground tracking-wider uppercase mb-4">Extracted Claims ({analyzedClaims.length})</h3>
               <ScrollArea className="flex-1 -mx-4 px-4">
-                <div className="space-y-3 animate-in slide-in-from-left-4 fade-in duration-700">
+                <div className="space-y-2.5 animate-in slide-in-from-left-4 fade-in duration-700">
                   {analyzedClaims.map((claim) => (
-                    <Card key={claim.id} className="border-l-4 transition-all hover:shadow-md" style={{ borderLeftColor: getVerdictStyle(claim.aggregatedVerdict).indicator }}>
+                    <Card key={claim.id} className="border-l-4 rounded-xl transition-all hover:shadow-sm" style={{ borderLeftColor: getVerdictStyle(claim.aggregatedVerdict).indicator }}>
                       <CardContent className="p-3">
-                        <p className="text-sm line-clamp-3">{claim.text}</p>
+                        <p className="text-sm font-medium leading-normal text-foreground/90 line-clamp-3">{claim.text}</p>
                       </CardContent>
                     </Card>
                   ))}
@@ -420,7 +502,7 @@ function AnalyzeContent() {
         {/* Main Area: Heatmap, Score, Verdicts */}
         <div className="flex-1 bg-background relative flex flex-col min-w-0">
           <div className="absolute inset-0 overflow-y-auto pb-32">
-            <div key={loadingState} id="pdf-report-content" className="max-w-4xl mx-auto p-6 md:p-8 space-y-8 pb-32 animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both">
+            <div key={loadingState} id="pdf-report-content" className="max-w-7xl mx-auto p-8 space-y-6 pb-32 animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both">
               
               {/* PDF Header (Hidden normally, shown during print) */}
               <div className="hidden print-header mb-8 pb-4 border-b">
@@ -431,253 +513,423 @@ function AnalyzeContent() {
                 <p className="text-muted-foreground">Generated on {new Date().toLocaleDateString()}</p>
               </div>
 
-              {/* Premium Overview Card */}
-              <Card className="bg-card border-primary/20 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-5">
-                  <Network className="w-64 h-64" />
+              {/* Hero Verdict */}
+              <div className="border border-border/50 rounded-2xl p-6 bg-card shadow-sm space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className={overallVerdictText === "TRUE" ? "text-emerald-500" : overallVerdictText === "FALSE" ? "text-red-500" : "text-amber-500"}>
+                    {overallVerdictText === "TRUE" ? <CheckCircle2 className="w-12 h-12" /> : overallVerdictText === "FALSE" ? <XCircle className="w-12 h-12" /> : <AlertTriangle className="w-12 h-12" />}
+                  </span>
+                  <h1 className={`text-5xl font-extrabold tracking-tight ${
+                    overallVerdictText === "TRUE" ? "text-emerald-500" : overallVerdictText === "FALSE" ? "text-red-500" : "text-amber-500"
+                  }`}>
+                    {overallVerdictText}
+                  </h1>
                 </div>
                 
-                {/* Header Section */}
-                <div className="p-6 pb-4 border-b border-primary/10 flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <h2 className="text-2xl font-bold tracking-tight">Overall Verdict</h2>
-                      <Badge variant="outline" className={`${verdictStyle.bg} ${verdictStyle.color} text-sm px-4 py-1.5 border-current font-bold uppercase tracking-widest shadow-sm rounded-full`}>
-                        {overallVerdictText}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground font-medium">
-                      <span>Confidence <strong className="text-foreground">{Math.round(analyzedClaims.reduce((acc, c) => acc + c.aggregatedConfidence, 0) / (analyzedClaims.length || 1)) || 0}%</strong></span>
-                      <span>•</span>
-                      <span>Agreement <strong className="text-foreground">{activeModels.length}/{activeModels.length}</strong></span>
-                      <span>•</span>
-                      <span>Sources <strong className="text-foreground">{allSources.length}</strong></span>
-                    </div>
+                <p className="text-base font-semibold leading-relaxed text-foreground">
+                  {misconception ? (misconception.split('.').slice(0, 2).join('.') + '.') : (analyzedClaims[0]?.explanation ? (analyzedClaims[0].explanation.split('.')[0] + '.') : "Analyzing claim evidence...")}
+                </p>
+                
+                <hr className="border-border/30" />
+                
+                <div className="flex flex-wrap items-center justify-between gap-4 text-xs font-semibold text-[#6B7280]">
+                  <div className="flex items-center gap-4">
+                    <span>Confidence <strong className="text-foreground font-bold">{Math.round(analyzedClaims.reduce((acc, c) => acc + c.aggregatedConfidence, 0) / (analyzedClaims.length || 1)) || 0}%</strong></span>
+                    <span>•</span>
+                    <span><strong className="text-foreground font-bold">{activeModels.length}/{activeModels.length}</strong> AI Models Agree</span>
+                    <span>•</span>
+                    <span><strong className="text-foreground font-bold">{allSources.length}</strong> Cited Sources</span>
                   </div>
                   
-                  {isHumorous && (
-                    <div className="flex items-center gap-2 bg-purple-500/10 text-purple-600 border border-purple-500/20 px-4 py-2 rounded-full shadow-sm animate-in fade-in zoom-in duration-500">
-                      <span className="text-lg">🎭</span>
-                      <span className="text-sm font-bold tracking-wide uppercase">Humor Detected</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Middle Section: Split view */}
-                <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x border-b border-primary/10 relative z-10 bg-background/50 backdrop-blur-sm">
-                  <div className="p-6 flex flex-col justify-center">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2 text-center">Evidence Strength</h3>
-                    {loadingState !== "done" ? (
-                      <div className="flex items-center gap-2 justify-center h-32">
-                        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                        <span className="text-2xl text-muted-foreground font-medium">Analyzing...</span>
-                      </div>
-                    ) : (
-                      <div className="relative flex flex-col items-center justify-center w-full h-32 mt-4">
-                        {/* Brain Icon in the center */}
-                        <div className="absolute top-[35px] flex flex-col items-center justify-center">
-                          <Brain className="w-10 h-10 text-muted-foreground/20 dark:text-muted-foreground/10 animate-pulse" />
-                          <span className="text-xl font-bold tracking-tight mt-1">{overallScore}</span>
-                        </div>
-                        <svg viewBox="0 0 120 70" className="w-48 h-28">
-                          {/* Dashed vertical line */}
-                          <line x1="60" y1="0" x2="60" y2="60" stroke="#ddd" strokeDasharray="2 2" className="stroke-muted-foreground/20 dark:stroke-muted-foreground/10" />
-                          {/* Dashed horizontal line */}
-                          <line x1="10" y1="60" x2="110" y2="60" stroke="#ddd" strokeDasharray="2 2" className="stroke-muted-foreground/20 dark:stroke-muted-foreground/10" />
-                          {/* Background Arc */}
-                          <path
-                            d="M 15 60 A 45 45 0 0 1 105 60"
-                            fill="none"
-                            stroke="currentColor"
-                            className="text-muted/20 dark:text-muted/10"
-                            strokeWidth={8}
-                            strokeLinecap="round"
-                          />
-                          {/* Foreground Arc */}
-                          <path
-                            d="M 15 60 A 45 45 0 0 1 105 60"
-                            fill="none"
-                            stroke={overallScore <= 30 ? "#ef4444" : overallScore <= 70 ? "#f59e0b" : "#10b981"}
-                            strokeWidth={8}
-                            strokeLinecap="round"
-                            strokeDasharray={Math.PI * 45}
-                            strokeDashoffset={Math.PI * 45 - (overallScore / 100) * (Math.PI * 45)}
-                            style={{ transition: "stroke-dashoffset 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)" }}
-                          />
-                        </svg>
-                        {/* Low / High Labels */}
-                        <div className="absolute top-[35px] left-[calc(50%-110px)] text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Low</div>
-                        <div className="absolute top-[35px] right-[calc(50%-110px)] text-[10px] font-bold text-muted-foreground uppercase tracking-wider">High</div>
-                      </div>
+                  <div className="flex gap-2">
+                    {isHumorous && (
+                      <span className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full text-[10px] tracking-wider uppercase font-extrabold">Humor</span>
                     )}
-                  </div>
-
-                  <div className="p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-primary/10">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">Ridiculousness</h3>
-                    <div className="flex items-baseline gap-1 justify-center">
-                      {loadingState === "extracting" ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                          <span className="text-2xl text-muted-foreground font-medium">Reading...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <span className="text-2xl text-muted-foreground font-medium mr-2">{ridiculousnessScore > 80 ? "Absurd" : ridiculousnessScore > 50 ? "Silly" : ridiculousnessScore > 20 ? "Questionable" : "Serious"}</span>
-                          <span className="text-6xl font-serif font-bold tracking-tighter text-purple-500/80">{ridiculousnessScore}</span>
-                          <span className="text-xl text-muted-foreground font-medium">%</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="p-6">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Why This Verdict</h3>
-                    <ul className="space-y-3">
-                      {allSources.slice(0, 4).map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          {s.reliabilityScore > 85 ? (
-                            <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                          ) : (
-                            <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />
-                          )}
-                          <span className="text-foreground/90 font-medium leading-snug">{s.title}</span>
-                        </li>
-                      ))}
-                      {allSources.length === 0 && <li className="text-sm text-muted-foreground">Waiting for sources...</li>}
-                    </ul>
-                  </div>
-                </div>
-
-                {misconception && (
-                  <div className="border-t border-b border-orange-500/20 relative z-10">
-                    <button
-                      onClick={() => setIsMisconceptionExpanded(!isMisconceptionExpanded)}
-                      className="w-full flex items-center justify-between px-6 py-4 bg-orange-500/5 hover:bg-orange-500/10 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
-                        <h3 className="text-sm font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">
-                          Why People Believe This
-                        </h3>
-                      </div>
-                      <ChevronDown className={`w-5 h-5 text-orange-500 transition-transform duration-200 ${isMisconceptionExpanded ? "rotate-180" : ""}`} />
-                    </button>
-                    
-                    {isMisconceptionExpanded && (
-                      <div className="px-6 pb-5 pt-1 bg-orange-500/5 animate-in fade-in slide-in-from-top-2 duration-200">
-                        <p className="text-sm text-foreground/90 leading-relaxed font-medium pl-8">
-                          {misconception}
-                        </p>
-                      </div>
+                    {ridiculousnessScore > 50 && (
+                      <span className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full text-[10px] tracking-wider uppercase font-extrabold">
+                        {ridiculousnessScore > 80 ? "Satire" : "Silly"}
+                      </span>
                     )}
+                    <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full text-[10px] tracking-wider uppercase font-extrabold">AI Verified</span>
                   </div>
-                )}
-
-                {/* Footer Section */}
-                <div className="p-6 bg-muted/30 relative z-10">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Investigation Summary</h3>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p className="animate-in fade-in slide-in-from-bottom-2 duration-700 fill-mode-both" style={{ animationDelay: '200ms' }}>
-                      Investigation completed in <strong className="text-foreground">5.2 sec</strong>.
-                    </p>
-                    <p className="animate-in fade-in slide-in-from-bottom-2 duration-700 fill-mode-both" style={{ animationDelay: '1200ms' }}>
-                      <strong className="text-foreground">{allSources.length}</strong> unique sources retrieved by <strong className="text-foreground">2</strong> research agents.
-                    </p>
-                    <p className="animate-in fade-in slide-in-from-bottom-2 duration-700 fill-mode-both" style={{ animationDelay: '2200ms' }}>
-                      <strong className="text-foreground">{activeModels.length}</strong> AI reviewers reached a <strong className={`${verdictStyle.color} font-bold lowercase`}>{overallVerdictText}</strong> consensus.
-                    </p>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Text Heatmap (Moved out of Overview) */}
-              <div className="pt-2">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">Source Text Heatmap</h3>
-                <div className="bg-card border shadow-sm p-6 rounded-lg text-lg leading-relaxed">
-                  <HeatmapText text={originalInput} claims={analyzedClaims} />
                 </div>
               </div>
 
-              {/* Detailed Claims Breakdown */}
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold flex items-center gap-2">
-                  Detailed Analysis
-                </h3>
-                
-                {analyzedClaims.length === 0 && loadingState === "done" && (
-                  <div className="text-center p-8 text-muted-foreground border border-dashed rounded-lg">
-                    No verifiable claims could be extracted from the provided text.
+              {/* Key Metrics Stack (no dividers, whitespace) */}
+              <div className="grid md:grid-cols-2 gap-6 border border-border/30 rounded-2xl p-6 bg-card shadow-sm">
+                {/* Left: Trust Summary */}
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">Trust Summary</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-foreground/80 truncate">Evidence Strength</span>
+                      <SegmentedBar value={overallScore} activeColor={overallScore <= 30 ? "bg-red-500" : overallScore <= 70 ? "bg-amber-500" : "bg-emerald-500"} />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-foreground/80 truncate">Scientific Consensus</span>
+                      <SegmentedBar value={trustMetrics.consensus} activeColor="bg-blue-500" />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-foreground/80 truncate">Source Quality</span>
+                      <SegmentedBar value={trustMetrics.quality} activeColor="bg-emerald-500" />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-foreground/80 truncate">Reasoning Consistency</span>
+                      <SegmentedBar value={trustMetrics.consistency} activeColor="bg-blue-500" />
+                    </div>
                   </div>
-                )}
+                </div>
+                
+                {/* Right: Evidence & Ridiculousness (Supplementary) */}
+                <div className="flex flex-col justify-between space-y-6">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest mb-3">Evidence Grade</h3>
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
+                        <Brain className={`w-8 h-8 ${overallScore <= 30 ? "text-red-500" : overallScore <= 70 ? "text-amber-500" : "text-emerald-500"}`} />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold font-mono tracking-tight text-foreground">{overallScore}/100</div>
+                        <div className={`text-xs font-bold uppercase tracking-wider ${overallScore <= 30 ? "text-red-500" : overallScore <= 70 ? "text-amber-500" : "text-emerald-500"}`}>
+                          {overallScore <= 30 ? "Weak Evidence" : overallScore <= 70 ? "Moderate Evidence" : "Strong Evidence"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest mb-2">Ridiculousness</h3>
+                    {loadingState === "extracting" ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Calculating...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex gap-0.5 items-center">
+                          {Array.from({ length: 10 }).map((_, i) => (
+                            <div 
+                              key={i} 
+                              className={`h-2 w-2 rounded-[2px] transition-all duration-500 ${
+                                i < Math.round(ridiculousnessScore / 10) 
+                                  ? "bg-purple-500" 
+                                  : "bg-muted/30 dark:bg-muted/10"
+                              }`}
+                            />
+                          ))}
+                          <span className="text-[10px] font-mono font-bold ml-1.5 text-purple-600 dark:text-purple-400">{ridiculousnessScore}%</span>
+                        </div>
+                        <div className="text-[10px] font-extrabold uppercase tracking-widest text-purple-500/80">
+                          {ridiculousnessScore > 80 ? "ABSURD" : ridiculousnessScore > 50 ? "SILLY" : ridiculousnessScore > 20 ? "QUESTIONABLE" : "SERIOUS"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-                <Accordion className="w-full space-y-4">
-                  {analyzedClaims.map((claim, index) => {
-                    const style = getVerdictStyle(claim.aggregatedVerdict);
+              {/* Why This Verdict */}
+              <div className="border border-border/30 rounded-2xl p-6 bg-card shadow-sm space-y-4">
+                <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">Why This Verdict</h3>
+                <ul className="space-y-3 pl-1">
+                  {analyzedClaims.slice(0, 4).map((claim, i) => {
+                    const isTrue = claim.aggregatedVerdict.includes("True");
+                    const shortSummary = claim.explanation ? (claim.explanation.split('.')[0] + '.') : "Reasoning summary not available.";
                     return (
-                      <AccordionItem key={claim.id} value={`item-${claim.id}`} className={`border ${style.border} rounded-lg bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow animate-in slide-in-from-bottom-4 fade-in duration-500 fill-mode-both`} style={{ animationDelay: `${index * 150}ms` }}>
-                        <AccordionTrigger className={`px-4 py-3 hover:no-underline ${style.bg}`}>
-                          <div className="flex items-start justify-between w-full text-left pr-4 gap-4">
-                            <span className="text-base font-semibold leading-tight flex-1">{claim.text}</span>
-                            <Badge variant="outline" className={`${style.color} border-current shrink-0 text-sm py-1 bg-background/50`}>
-                              {style.icon}
-                              {claim.aggregatedVerdict} ({claim.aggregatedConfidence}%)
-                            </Badge>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="p-4 pt-6 space-y-6">
+                      <li key={i} className="flex items-start gap-2.5 text-sm">
+                        <span className="mt-0.5 shrink-0">
+                          {isTrue ? (
+                            <Check className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                        </span>
+                        <span className="text-foreground/90 font-medium leading-relaxed">
+                          <strong>{claim.text}:</strong> {shortSummary}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {analyzedClaims.length === 0 && <li className="text-sm text-muted-foreground">Waiting for consensus findings...</li>}
+                </ul>
+                
+                <div className="pt-2 border-t border-border/30 text-xs font-medium text-[#6B7280]">
+                  <span>Sources: </span>
+                  {allSources.length > 0 ? (
+                    <span className="text-foreground/80 font-semibold">
+                      {allSources.slice(0, 5).map(s => s.domain).join(" • ")}
+                      {allSources.length > 5 && ` • and ${allSources.length - 5} more`}
+                    </span>
+                  ) : (
+                    <span>No cited domains loaded yet.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Tabs Navigation & Deep Dive Content */}
+              <div className="space-y-6 pt-4">
+                {/* Tab Navigation */}
+                <div className="flex border-b border-border/30 gap-6 text-sm font-semibold tracking-wide">
+                  {(["overview", "claims", "sources", "consensus"] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`pb-3 capitalize transition-all relative ${
+                        activeTab === tab 
+                          ? "text-primary border-b-2 border-primary font-bold" 
+                          : "text-muted-foreground hover:text-foreground/80"
+                      }`}
+                    >
+                      {tab === "consensus" ? "Model Consensus" : tab === "sources" ? "Cited Sources" : tab}
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Tab Content Panels */}
+                <div className="animate-in fade-in duration-300">
+                  {activeTab === "overview" && (
+                    <div className="space-y-6">
+                      {/* Why People Believe This */}
+                      {misconception && (
+                        <div className="border border-orange-500/20 rounded-2xl relative z-10 overflow-hidden bg-orange-500/5">
+                          <button
+                            onClick={() => setIsMisconceptionExpanded(!isMisconceptionExpanded)}
+                            className="w-full flex items-center justify-between px-6 py-4 hover:bg-orange-500/10 transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-3">
+                              <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
+                              <h3 className="text-sm font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                                Why People Believe This
+                              </h3>
+                            </div>
+                            <ChevronDown className={`w-5 h-5 text-orange-500 transition-transform duration-200 ${isMisconceptionExpanded ? "rotate-180" : ""}`} />
+                          </button>
                           
-                          <div>
-                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Model Consensus</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              {claim.modelResults.map(res => {
-                                const mStyle = getVerdictStyle(res.verdict);
-                                return (
-                                  <div key={res.model} className="p-4 border rounded-md bg-muted/30 flex flex-col justify-between">
-                                    <div>
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="font-medium text-sm">{MODEL_DISPLAY_NAMES[res.model] || res.model}</span>
-                                        <span className={`text-xs font-bold ${mStyle.color}`}>{res.verdict}</span>
-                                      </div>
-                                      <p className="text-sm text-muted-foreground mb-1 line-clamp-6">
-                                        {res.explanation}
-                                      </p>
-                                      {res.explanation.length > 250 && (
-                                        <Dialog>
-                                          <DialogTrigger className="text-xs text-primary mb-4 w-fit hover:underline text-left cursor-pointer">
-                                            See more
-                                          </DialogTrigger>
-                                          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                            <DialogHeader>
-                                              <DialogTitle>{MODEL_DISPLAY_NAMES[res.model] || res.model} Analysis</DialogTitle>
-                                              <DialogDescription>
-                                                Detailed breakdown of the claim.
-                                              </DialogDescription>
-                                            </DialogHeader>
-                                            <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap mt-4">
-                                              {res.explanation}
+                          {isMisconceptionExpanded && (
+                            <div className="px-6 pb-5 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                              <p className="text-sm text-foreground/90 leading-relaxed font-medium pl-8">
+                                {misconception}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Source Text Heatmap */}
+                      <div className="space-y-3">
+                        <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest px-1">Source Text Heatmap</h3>
+                        <div className="bg-card border border-border/30 shadow-sm p-6 rounded-2xl text-lg leading-relaxed font-medium">
+                          <HeatmapText text={originalInput} claims={analyzedClaims} />
+                        </div>
+                      </div>
+                      
+                      {/* Multimodal Preview placeholder */}
+                      <div className="border border-dashed border-border/30 rounded-2xl p-6 bg-muted/5 flex flex-col items-center justify-center gap-3 text-center">
+                        <Image className="w-8 h-8 text-muted-foreground/40" />
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground/80">Multimodal Image Context</h4>
+                          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                            Veridica supports analyzing claims extracted from diagrams, screenshots, or receipts. Uploaded documents will preview here.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {activeTab === "claims" && (
+                    <div className="space-y-4">
+                      {analyzedClaims.length === 0 && (
+                        <div className="text-center p-8 text-muted-foreground border border-dashed rounded-2xl">
+                          No claims extracted.
+                        </div>
+                      )}
+                      {analyzedClaims.map((claim) => {
+                        const style = getVerdictStyle(claim.aggregatedVerdict);
+                        const isExpanded = expandedClaims[claim.id] || false;
+                        
+                        return (
+                          <div 
+                            key={claim.id} 
+                            className={`border ${style.border} rounded-2xl bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow`}
+                          >
+                            {/* GitHub PR Comment style header */}
+                            <div className="px-6 py-4 flex items-center justify-between gap-4 border-b border-border/30 bg-muted/10">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className="text-xs font-bold text-muted-foreground shrink-0 uppercase tracking-wider">Claim {claim.id}</span>
+                                <span className="text-sm font-bold text-foreground leading-normal truncate">{claim.text}</span>
+                              </div>
+                              <Badge variant="outline" className={`${style.color} border-current shrink-0 text-xs px-2.5 py-0.5 rounded-md`}>
+                                {claim.aggregatedVerdict}
+                              </Badge>
+                            </div>
+                            
+                            <div className="px-6 py-4">
+                              <button
+                                onClick={() => setExpandedClaims(prev => ({ ...prev, [claim.id]: !isExpanded }))}
+                                className="text-xs font-bold text-[#60A5FA] flex items-center gap-1 hover:underline cursor-pointer"
+                              >
+                                {isExpanded ? "Collapse analysis ↑" : "Expand analysis →"}
+                              </button>
+                              
+                              {isExpanded && (
+                                <div className="mt-4 pt-4 border-t border-border/20 space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                                  <div>
+                                    <h4 className="text-xs font-bold text-[#6B7280] uppercase tracking-wider mb-3">Model Consensus</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      {claim.modelResults.map(res => {
+                                        const mStyle = getVerdictStyle(res.verdict);
+                                        return (
+                                          <div key={res.model} className="p-4 border border-border/30 rounded-xl bg-muted/10 flex flex-col justify-between">
+                                            <div>
+                                              <div className="flex items-center justify-between mb-2">
+                                                <span className="font-semibold text-xs text-foreground/80">{MODEL_DISPLAY_NAMES[res.model] || res.model}</span>
+                                                <span className={`text-xs font-extrabold ${mStyle.color}`}>{res.verdict}</span>
+                                              </div>
+                                              <p className="text-xs text-[#9CA3AF] mb-2 leading-relaxed line-clamp-6">
+                                                {res.explanation}
+                                              </p>
+                                              {res.explanation.length > 200 && (
+                                                <Dialog>
+                                                  <DialogTrigger className="text-[10px] font-bold text-[#60A5FA] mb-3 hover:underline text-left cursor-pointer block">
+                                                    See more
+                                                  </DialogTrigger>
+                                                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                                                    <DialogHeader>
+                                                      <DialogTitle>{MODEL_DISPLAY_NAMES[res.model] || res.model} Analysis</DialogTitle>
+                                                      <DialogDescription>
+                                                        Detailed explanation of this claim analysis.
+                                                      </DialogDescription>
+                                                    </DialogHeader>
+                                                    <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap mt-4">
+                                                      {res.explanation}
+                                                    </div>
+                                                  </DialogContent>
+                                                </Dialog>
+                                              )}
                                             </div>
-                                          </DialogContent>
-                                        </Dialog>
-                                      )}
-                                      {res.explanation.length <= 250 && <div className="mb-4" />}
-                                    </div>
-                                    <div className="space-y-1.5">
-                                      <div className="flex justify-between text-xs text-muted-foreground">
-                                        <span>Confidence</span>
-                                        <span>{res.confidence}%</span>
-                                      </div>
-                                      <Progress value={res.confidence} className={`h-1.5 ${mStyle.bg}`} indicatorColor={mStyle.indicator} />
+                                            <div className="space-y-1.5">
+                                              <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
+                                                <span>Confidence</span>
+                                                <span>{res.confidence}%</span>
+                                              </div>
+                                              <Progress value={res.confidence} className={`h-1 ${mStyle.bg}`} indicatorColor={mStyle.indicator} />
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
-                                )
-                              })}
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    )
-                  })}
-                </Accordion>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {activeTab === "sources" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {allSources.length === 0 && (
+                        <div className="col-span-2 text-center p-8 text-muted-foreground border border-dashed rounded-2xl">
+                          No sources cited.
+                        </div>
+                      )}
+                      {allSources.map((source, i) => (
+                        <div key={i} className="border border-border/30 rounded-2xl p-5 bg-card flex flex-col justify-between gap-4">
+                          <div>
+                            <h4 className="text-base font-bold text-foreground leading-normal line-clamp-1">{source.title}</h4>
+                            <p className="text-xs text-muted-foreground font-semibold mt-0.5">{source.domain}</p>
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t border-border/20">
+                            <span className={`text-sm font-bold ${
+                              source.reliabilityScore >= 90 ? 'text-green-500' : source.reliabilityScore >= 80 ? 'text-yellow-500' : 'text-red-500'
+                            }`}>
+                              {source.reliabilityScore} Reliability
+                            </span>
+                            <a 
+                              href={source.url || "#"} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-xs font-bold text-[#60A5FA] flex items-center gap-1 hover:underline cursor-pointer"
+                            >
+                              Open →
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {activeTab === "consensus" && (
+                    <div className="border border-border/30 rounded-2xl overflow-hidden bg-card">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-muted/10 text-xs font-bold text-[#6B7280] uppercase tracking-wider border-b border-border/30">
+                            <th className="px-6 py-4">Model</th>
+                            <th className="px-6 py-4">Verdict</th>
+                            <th className="px-6 py-4 text-right">Confidence</th>
+                            <th className="px-6 py-4 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/20 text-sm font-medium">
+                          {activeModels.map(model => {
+                            let trueCount = 0; let falseCount = 0; let totalConf = 0;
+                            let explanations: string[] = [];
+                            analyzedClaims.forEach(c => {
+                              const res = c.modelResults.find(r => r.model === model);
+                              if (res) {
+                                totalConf += res.confidence;
+                                explanations.push(res.explanation);
+                                if (res.verdict.includes("True")) trueCount++;
+                                if (res.verdict.includes("False")) falseCount++;
+                              }
+                            });
+                            const globalVerdict = trueCount > falseCount ? (falseCount === 0 ? "True" : "Mostly True") : falseCount > trueCount ? (trueCount === 0 ? "False" : "Mostly False") : "Mixed";
+                            const avgConfidence = analyzedClaims.length > 0 ? Math.round(totalConf / analyzedClaims.length) : 0;
+                            const mStyle = getVerdictStyle(globalVerdict);
+                            const isExpanded = expandedModels[model] || false;
+                            
+                            return (
+                              <React.Fragment key={model}>
+                                <tr className="hover:bg-muted/5 transition-colors">
+                                  <td className="px-6 py-4 font-bold text-foreground">{MODEL_DISPLAY_NAMES[model]}</td>
+                                  <td className="px-6 py-4">
+                                    <span className={`text-xs font-extrabold ${mStyle.color}`}>{globalVerdict}</span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right font-mono font-bold text-foreground/80">{avgConfidence}%</td>
+                                  <td className="px-6 py-4 text-right">
+                                    <button
+                                      onClick={() => setExpandedModels(prev => ({ ...prev, [model]: !isExpanded }))}
+                                      className="text-xs font-bold text-[#60A5FA] hover:underline cursor-pointer"
+                                    >
+                                      {isExpanded ? "Collapse explanation ↑" : "Read explanation →"}
+                                    </button>
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr>
+                                    <td colSpan={4} className="px-6 py-4 bg-muted/5 border-t border-b border-border/20">
+                                      <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                                        {explanations.map((exp, idx) => (
+                                          <div key={idx} className="text-xs text-[#9CA3AF] leading-relaxed border-l-2 border-border/30 pl-3">
+                                            <strong className="text-foreground/80 block mb-1">Claim {idx+1} Consensus:</strong>
+                                            "{exp}"
+                                          </div>
+                                        ))}
+                                        {explanations.length === 0 && <div className="text-xs text-muted-foreground">No explanations loaded.</div>}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
 
             </div>
