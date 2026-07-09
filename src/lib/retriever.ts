@@ -15,7 +15,7 @@ export type EvidenceSnapshot = {
   timestamp: string;
 };
 
-import { getMeshClient } from "./mesh";
+import { getMeshClient, trackUsage } from "./mesh";
 
 async function performSearchWithLLM(claim: string, model: string, agentName: string): Promise<RetrievedSource[]> {
   const client = getMeshClient();
@@ -33,6 +33,10 @@ async function performSearchWithLLM(claim: string, model: string, agentName: str
     ],
     temperature: 0.3,
   });
+
+  if (response.usage?.total_tokens) {
+    trackUsage(response.usage.total_tokens, 0.50);
+  }
 
   const content = response.choices[0]?.message?.content;
   if (!content) return [];

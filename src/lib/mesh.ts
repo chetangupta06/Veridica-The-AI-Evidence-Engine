@@ -18,6 +18,20 @@ export const getMeshClient = () => {
   });
 };
 
+export const trackUsage = (tokens: number, costPer1M: number = 0.50) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const saved = localStorage.getItem("veridica_api_usage");
+    const current = saved ? JSON.parse(saved) : { requests: 0, tokens: 0, cost: 0 };
+    current.requests += 1;
+    current.tokens += tokens;
+    current.cost += (tokens / 1000000) * costPer1M;
+    localStorage.setItem("veridica_api_usage", JSON.stringify(current));
+  } catch (e) {
+    console.error("Failed to track usage", e);
+  }
+};
+
 export type ExtractedClaim = {
   id: number;
   text: string;
@@ -72,6 +86,10 @@ export async function extractClaims(text: string, modelsToUse: string[]): Promis
           temperature: 0.2,
         });
 
+        if (response.usage?.total_tokens) {
+          trackUsage(response.usage.total_tokens, 0.50);
+        }
+
         const content = response.choices[0]?.message?.content;
         if (!content) throw new Error("Empty response from Mesh API");
 
@@ -118,6 +136,10 @@ export async function analyzeClaim(claim: string, snapshot: EvidenceSnapshot, se
           ],
           temperature: 0.1,
         });
+
+        if (response.usage?.total_tokens) {
+          trackUsage(response.usage.total_tokens, 1.00);
+        }
 
         const content = response.choices[0]?.message?.content;
         if (!content) throw new Error("Empty response");

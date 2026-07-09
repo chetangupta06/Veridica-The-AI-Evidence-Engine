@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [sourceExtractorModels, setSourceExtractorModels] = useState<string[]>(["openai/gpt-4o-mini"])
   const [apiKey, setApiKey] = useState("")
   const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
+  const [apiUsage, setApiUsage] = useState({ requests: 0, tokens: 0, cost: 0 })
   
   const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite", "x-ai/grok-4.3"]
 
@@ -50,6 +51,11 @@ export default function SettingsPage() {
     const savedCustom = localStorage.getItem("veridica_custom_models")
     if (savedCustom) {
       try { setCustomModels(JSON.parse(savedCustom)) } catch (e) {}
+    }
+    
+    const savedUsage = localStorage.getItem("veridica_api_usage")
+    if (savedUsage) {
+      try { setApiUsage(JSON.parse(savedUsage)) } catch (e) {}
     }
   }, [])
 
@@ -304,15 +310,21 @@ export default function SettingsPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 border rounded-lg bg-card text-center hover:bg-muted/10 transition-colors">
-                <div className="text-2xl font-bold text-primary">1,245</div>
+                <div className="text-2xl font-bold text-primary">{apiUsage.requests.toLocaleString()}</div>
                 <div className="text-sm text-muted-foreground mt-1">Requests this month</div>
               </div>
               <div className="p-4 border rounded-lg bg-card text-center hover:bg-muted/10 transition-colors">
-                <div className="text-2xl font-bold text-primary">8.4M</div>
+                <div className="text-2xl font-bold text-primary">
+                  {apiUsage.tokens > 1000000 
+                    ? (apiUsage.tokens / 1000000).toFixed(1) + 'M' 
+                    : apiUsage.tokens > 1000 
+                      ? (apiUsage.tokens / 1000).toFixed(1) + 'K' 
+                      : apiUsage.tokens.toLocaleString()}
+                </div>
                 <div className="text-sm text-muted-foreground mt-1">Tokens processed</div>
               </div>
               <div className="p-4 border rounded-lg bg-card text-center hover:bg-muted/10 transition-colors">
-                <div className="text-2xl font-bold text-primary">$12.40</div>
+                <div className="text-2xl font-bold text-primary">${apiUsage.cost.toFixed(4)}</div>
                 <div className="text-sm text-muted-foreground mt-1">Estimated Cost</div>
               </div>
             </div>
