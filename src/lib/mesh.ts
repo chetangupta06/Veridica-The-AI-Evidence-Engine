@@ -45,14 +45,20 @@ export type ClaimAnalysis = ExtractedClaim & {
   aggregatedConfidence: number;
 };
 
-export async function extractClaims(text: string, model: string): Promise<ExtractedClaim[]> {
+export type ExtractionResult = {
+  claims: ExtractedClaim[];
+  ridiculousnessScore: number;
+  isHumorous: boolean;
+};
+
+export async function extractClaims(text: string, model: string): Promise<ExtractionResult> {
   const client = getMeshClient();
   const response = await client.chat.completions.create({
       model: model,
       messages: [
         {
           role: "system",
-          content: "Extract all verifiable factual claims, statistics, dates, names, and quotes from the text. Return as a clean JSON array of objects with the keys 'text', 'verdict' (TRUE, FALSE, or UNVERIFIABLE), 'confidence' (0-100), and 'explanation'. Do not wrap the JSON in markdown blocks like ```json."
+          content: "Extract all verifiable factual claims, statistics, dates, names, and quotes from the text. Return as a clean JSON object with three keys: 'claims' (an array of objects with 'text', 'verdict' (TRUE, FALSE, or UNVERIFIABLE), 'confidence' (0-100), and 'explanation'), 'ridiculousnessScore' (0-100 score indicating how absurd, novelty, or ridiculous the overall text is), and 'isHumorous' (boolean flag indicating if the input is obviously silly or a joke). Do not wrap the JSON in markdown blocks like ```json."
         },
         {
           role: "user",
@@ -66,15 +72,20 @@ export async function extractClaims(text: string, model: string): Promise<Extrac
     if (!content) throw new Error("Empty response from Mesh API");
 
     const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
-    const parsedClaims = JSON.parse(cleanContent);
+    const parsed = JSON.parse(cleanContent);
+    const parsedClaims = Array.isArray(parsed) ? parsed : (parsed.claims || []);
     
-    return parsedClaims.map((claim: any, index: number) => ({
-      id: index + 1,
-      text: claim.text,
-      verdict: claim.verdict || "UNVERIFIABLE",
-      confidence: claim.confidence || 0,
-      explanation: claim.explanation || "No explanation provided.",
-    }));
+    return {
+      claims: parsedClaims.map((claim: any, index: number) => ({
+        id: index + 1,
+        text: claim.text,
+        verdict: claim.verdict || "UNVERIFIABLE",
+        confidence: claim.confidence || 0,
+        explanation: claim.explanation || "No explanation provided.",
+      })),
+      ridiculousnessScore: parsed.ridiculousnessScore || 0,
+      isHumorous: parsed.isHumorous || false
+    };
 }
 
 export async function analyzeClaim(claim: string, snapshot: EvidenceSnapshot, selectedModels: string[]): Promise<ModelAnalysisResult[]> {

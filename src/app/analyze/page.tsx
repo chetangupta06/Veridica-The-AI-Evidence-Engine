@@ -98,6 +98,8 @@ function AnalyzeContent() {
   
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
+  const [ridiculousnessScore, setRidiculousnessScore] = useState(0)
+  const [isHumorous, setIsHumorous] = useState(false)
 
   const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
@@ -142,8 +144,11 @@ function AnalyzeContent() {
   const runFullPipeline = async (text: string, modelsToUse: string[]) => {
     setLoadingState("extracting")
     try {
-      const extracted = await extractClaims(text, modelsToUse[0])
+      const result = await extractClaims(text, modelsToUse[0])
+      setRidiculousnessScore(result.ridiculousnessScore)
+      setIsHumorous(result.isHumorous)
       
+      const extracted = result.claims;
       toast.success(`Successfully extracted ${extracted.length} verifiable claims.`);
 
       setLoadingState("retrieving")
@@ -430,10 +435,17 @@ function AnalyzeContent() {
                       <span>Sources <strong className="text-foreground">{allSources.length}</strong></span>
                     </div>
                   </div>
+                  
+                  {isHumorous && (
+                    <div className="flex items-center gap-2 bg-purple-500/10 text-purple-600 border border-purple-500/20 px-4 py-2 rounded-full shadow-sm animate-in fade-in zoom-in duration-500">
+                      <span className="text-lg">🎭</span>
+                      <span className="text-sm font-bold tracking-wide uppercase">Humor Detected</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Middle Section: Split view */}
-                <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b border-primary/10 relative z-10 bg-background/50 backdrop-blur-sm">
+                <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x border-b border-primary/10 relative z-10 bg-background/50 backdrop-blur-sm">
                   <div className="p-6 flex flex-col justify-center">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">Evidence Strength</h3>
                     <div className="flex items-baseline gap-1 justify-center">
@@ -446,6 +458,24 @@ function AnalyzeContent() {
                         <>
                           <span className={`text-8xl font-serif font-bold ${verdictStyle.color} tracking-tighter`}>{overallScore}</span>
                           <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-primary/10">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">Ridiculousness</h3>
+                    <div className="flex items-baseline gap-1 justify-center">
+                      {loadingState === "extracting" ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                          <span className="text-2xl text-muted-foreground font-medium">Reading...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-2xl text-muted-foreground font-medium mr-2">{ridiculousnessScore > 80 ? "Absurd" : ridiculousnessScore > 50 ? "Silly" : ridiculousnessScore > 20 ? "Questionable" : "Serious"}</span>
+                          <span className="text-6xl font-serif font-bold tracking-tighter text-purple-500/80">{ridiculousnessScore}</span>
+                          <span className="text-xl text-muted-foreground font-medium">%</span>
                         </>
                       )}
                     </div>
