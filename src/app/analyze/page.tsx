@@ -101,6 +101,7 @@ function AnalyzeContent() {
   const [ridiculousnessScore, setRidiculousnessScore] = useState(0)
   const [isHumorous, setIsHumorous] = useState(false)
   const [misconception, setMisconception] = useState("")
+  const [isMisconceptionExpanded, setIsMisconceptionExpanded] = useState(true)
 
   const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
@@ -548,16 +549,27 @@ function AnalyzeContent() {
                 </div>
 
                 {misconception && (
-                  <div className="px-6 py-5 bg-orange-500/5 border-t border-b border-orange-500/20 relative z-10">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-orange-500 mt-0.5 shrink-0" />
-                      <div>
-                        <h3 className="text-sm font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-2">Why People Believe This</h3>
-                        <p className="text-sm text-foreground/90 leading-relaxed font-medium">
+                  <div className="border-t border-b border-orange-500/20 relative z-10">
+                    <button
+                      onClick={() => setIsMisconceptionExpanded(!isMisconceptionExpanded)}
+                      className="w-full flex items-center justify-between px-6 py-4 bg-orange-500/5 hover:bg-orange-500/10 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
+                        <h3 className="text-sm font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                          Why People Believe This
+                        </h3>
+                      </div>
+                      <ChevronDown className={`w-5 h-5 text-orange-500 transition-transform duration-200 ${isMisconceptionExpanded ? "rotate-180" : ""}`} />
+                    </button>
+                    
+                    {isMisconceptionExpanded && (
+                      <div className="px-6 pb-5 pt-1 bg-orange-500/5 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <p className="text-sm text-foreground/90 leading-relaxed font-medium pl-8">
                           {misconception}
                         </p>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
