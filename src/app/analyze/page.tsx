@@ -137,7 +137,7 @@ function AnalyzeContent() {
   const [inputCollapsed, setInputCollapsed] = useState(false)
   const [expandedClaims, setExpandedClaims] = useState<Record<number, boolean>>({})
   const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>({})
-  const [sourceExtractorModel, setSourceExtractorModel] = useState("openai/gpt-4o-mini")
+  const [sourceExtractorModels, setSourceExtractorModels] = useState<string[]>(["openai/gpt-4o-mini"])
 
   const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
 
@@ -161,7 +161,11 @@ function AnalyzeContent() {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
         if (parsed.defaultModel) setSelectedModels([parsed.defaultModel])
-        if (parsed.sourceExtractorModel) setSourceExtractorModel(parsed.sourceExtractorModel)
+        if (parsed.sourceExtractorModels) {
+          setSourceExtractorModels(parsed.sourceExtractorModels)
+        } else if (parsed.sourceExtractorModel) {
+          setSourceExtractorModels([parsed.sourceExtractorModel]) // migrate old single string
+        }
       } catch(e) {}
     }
 
@@ -178,7 +182,7 @@ function AnalyzeContent() {
         let sm = true; 
         let dm = DEFAULT_MODELS[0];
         let modelsList = [dm];
-        let extractor = "openai/gpt-4o-mini";
+        let extractor = ["openai/gpt-4o-mini"];
         
         if (saved) {
            const parsed = JSON.parse(saved)
@@ -187,9 +191,12 @@ function AnalyzeContent() {
              dm = parsed.defaultModel
              modelsList = [dm]
            }
-           if (parsed.sourceExtractorModel) {
-             extractor = parsed.sourceExtractorModel;
-             setSourceExtractorModel(extractor);
+           if (parsed.sourceExtractorModels) {
+             extractor = parsed.sourceExtractorModels;
+             setSourceExtractorModels(extractor);
+           } else if (parsed.sourceExtractorModel) {
+             extractor = [parsed.sourceExtractorModel];
+             setSourceExtractorModels(extractor);
            }
         }
         
@@ -218,7 +225,7 @@ function AnalyzeContent() {
     }
   }, []) // eslint-disable-line
 
-  const runFullPipeline = async (text: string, modelsToUse: string[], extractorModel: string) => {
+  const runFullPipeline = async (text: string, modelsToUse: string[], extractorModels: string[]) => {
     setLoadingState("extracting")
     try {
       const result = await extractClaims(text, modelsToUse)
@@ -233,7 +240,7 @@ function AnalyzeContent() {
       const detailedClaims: ClaimAnalysis[] = []
       
       for (const claim of claimsToAnalyze) {
-        const snapshot = await gatherEvidence(claim.text, extractorModel)
+        const snapshot = await gatherEvidence(claim.text, extractorModels)
         
         setLoadingState("analyzing") // Switch state as we pass to models
         const results = await analyzeClaim(claim.text, snapshot, modelsToUse)
@@ -448,7 +455,7 @@ function AnalyzeContent() {
                   <div className="border-t mt-2 pt-2 text-right">
                     <Button size="sm" className="w-full" onClick={() => {
                        setDropdownOpen(false)
-                       if (originalInput) runFullPipeline(originalInput, selectedModels, sourceExtractorModel)
+                       if (originalInput) runFullPipeline(originalInput, selectedModels, sourceExtractorModels)
                     }}>Apply & Run</Button>
                   </div>
                 </div>

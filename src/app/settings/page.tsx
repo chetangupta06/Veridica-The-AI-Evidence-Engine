@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Save, Activity, Settings2, Cpu, Palette, Key } from "lucide-react"
+import { ArrowLeft, Save, Activity, Settings2, Cpu, Palette, Key, ChevronDown, Check } from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useEffect, useState } from "react"
 
 export default function SettingsPage() {
@@ -17,9 +18,11 @@ export default function SettingsPage() {
   
   const [smartRouting, setSmartRouting] = useState(true)
   const [defaultModel, setDefaultModel] = useState("anthropic/claude-3-haiku")
-  const [sourceExtractorModel, setSourceExtractorModel] = useState("openai/gpt-4o-mini")
+  const [sourceExtractorModels, setSourceExtractorModels] = useState<string[]>(["openai/gpt-4o-mini"])
   const [apiKey, setApiKey] = useState("")
   const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
+  
+  const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite", "x-ai/grok-4.3"]
 
   // Avoid hydration mismatch
   useEffect(() => {
@@ -30,7 +33,11 @@ export default function SettingsPage() {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
         if (parsed.defaultModel) setDefaultModel(parsed.defaultModel)
-        if (parsed.sourceExtractorModel) setSourceExtractorModel(parsed.sourceExtractorModel)
+        if (parsed.sourceExtractorModels) {
+          setSourceExtractorModels(parsed.sourceExtractorModels)
+        } else if (parsed.sourceExtractorModel) {
+          setSourceExtractorModels([parsed.sourceExtractorModel]) // migrate old single string
+        }
       } catch(e) {
         console.error(e)
       }
@@ -47,7 +54,7 @@ export default function SettingsPage() {
   }, [])
 
   const handleSave = () => {
-    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, defaultModel, sourceExtractorModel }))
+    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, defaultModel, sourceExtractorModels }))
     localStorage.setItem("veridica_api_key", apiKey)
     alert("Settings saved!")
   }
@@ -152,21 +159,64 @@ export default function SettingsPage() {
               <label className="text-sm font-medium flex items-center gap-2">
                 Source Extractor AI
               </label>
-              <Select value={sourceExtractorModel} onValueChange={(val) => { if(val) setSourceExtractorModel(val) }}>
-                <SelectTrigger className="w-full md:w-1/2">
-                  <SelectValue placeholder="Select a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="anthropic/claude-3-haiku">Claude 3 Haiku</SelectItem>
-                  <SelectItem value="openai/gpt-4o-mini">GPT-4o Mini</SelectItem>
-                  <SelectItem value="google/gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</SelectItem>
-                  <SelectItem value="x-ai/grok-4.3">Grok</SelectItem>
-                  {customModels.map(m => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">The AI model used by the Research Agents to fetch and deduplicate initial sources.</p>
+              
+              <Dialog>
+                <DialogTrigger>
+                  <div className="w-full md:w-1/2 flex items-center justify-between border rounded-md px-3 py-2 text-sm text-muted-foreground bg-background hover:bg-muted/50 transition-colors cursor-pointer text-left h-10">
+                    <span className="truncate">
+                      {sourceExtractorModels.length} model{sourceExtractorModels.length !== 1 ? 's' : ''} selected
+                    </span>
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                  </div>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Select Source Extractors</DialogTitle>
+                    <DialogDescription>
+                      Choose one or more models to run in parallel as Research Agents.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2.5 py-4 max-h-[320px] overflow-y-auto pr-2">
+                    {[...DEFAULT_MODELS, ...customModels.map(m => m.id)].map((m) => {
+                      const isChecked = sourceExtractorModels.includes(m);
+                      const isCustom = !DEFAULT_MODELS.includes(m);
+                      const displayName = isCustom ? customModels.find(c => c.id === m)?.name : m.split('/').pop();
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => {
+                            if (isChecked) {
+                              if (sourceExtractorModels.length > 1) {
+                                setSourceExtractorModels(prev => prev.filter(x => x !== m));
+                              }
+                            } else {
+                              setSourceExtractorModels(prev => [...prev, m]);
+                            }
+                          }}
+                          className={`w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
+                            isChecked ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 hover:bg-muted/40"
+                          }`}
+                        >
+                          <div>
+                            <div className="font-semibold text-sm flex items-center gap-2">
+                              {displayName}
+                              {isCustom && <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Custom</span>}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate max-w-[200px] mt-0.5">{m}</div>
+                          </div>
+                          <div className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${
+                            isChecked ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
+                          }`}>
+                            {isChecked && <Check className="w-3.5 h-3.5" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <p className="text-xs text-muted-foreground">The AI models used by the Research Agents to fetch and deduplicate initial sources. Selecting multiple runs them in parallel.</p>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-muted/40 rounded-lg border">

@@ -4,7 +4,7 @@ export type RetrievedSource = {
   title: string;
   url: string;
   snippet: string;
-  retrievedBy: "Research Agent A" | "Research Agent B" | "Merged";
+  retrievedBy: string;
   reliabilityScore: number;
 };
 
@@ -17,7 +17,7 @@ export type EvidenceSnapshot = {
 
 import { getMeshClient } from "./mesh";
 
-async function performSearchWithLLM(claim: string, model: string, agentName: "Research Agent A" | "Research Agent B"): Promise<RetrievedSource[]> {
+async function performSearchWithLLM(claim: string, model: string, agentName: string): Promise<RetrievedSource[]> {
   const client = getMeshClient();
   const response = await client.chat.completions.create({
     model: model,
@@ -50,49 +50,10 @@ async function performSearchWithLLM(claim: string, model: string, agentName: "Re
   }
 }
 
-// Simulated Research Agent A
-async function researchAgentA(claim: string, model: string): Promise<RetrievedSource[]> {
-  return performSearchWithLLM(claim, model, "Research Agent A");
-}
 
-// Simulated Research Agent B
-async function researchAgentB(claim: string, model: string): Promise<RetrievedSource[]> {
-  // Use a slightly different prompt nuance or temperature to simulate diverse search
-  const client = getMeshClient();
-  const response = await client.chat.completions.create({
-    model: model,
-    messages: [
-      {
-        role: "system",
-        content: `You are Research Agent B, a meticulous web research agent. For the given claim, search your knowledge base to retrieve 2-3 highly relevant, factual sources that provide evidence (supporting or refuting). Prioritize different sources than an average search might yield to ensure broad coverage. Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), url (string absolute URL), title (string), snippet (string excerpt), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json.`
-      },
-      {
-        role: "user",
-        content: `Find evidence for this claim: ${claim}`
-      }
-    ],
-    temperature: 0.5, // slightly higher temp for variety
-  });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) return [];
-
-  try {
-    const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
-    const parsed = JSON.parse(cleanContent);
-    return parsed.map((src: any) => ({
-      ...src,
-      retrievedBy: "Research Agent B"
-    }));
-  } catch (e) {
-    console.error("Failed to parse search results from Agent B", e);
-    return [];
-  }
-}
 
 // Merge, Validate, and Deduplicate
-function mergeAndValidateSources(geminiSources: RetrievedSource[], grokSources: RetrievedSource[]): RetrievedSource[] {
-  const allSources = [...geminiSources, ...grokSources];
+function mergeAndValidateSources(allSources: RetrievedSource[]): RetrievedSource[] {
   const uniqueSources = new Map<string, RetrievedSource>();
 
   for (const source of allSources) {
@@ -120,16 +81,20 @@ function mergeAndValidateSources(geminiSources: RetrievedSource[], grokSources: 
 }
 
 // Main Pipeline Entrypoint
-export async function gatherEvidence(claim: string, extractorModel: string = "openai/gpt-4o-mini"): Promise<EvidenceSnapshot> {
+export async function gatherEvidence(claim: string, extractorModels: string[] = ["openai/gpt-4o-mini"]): Promise<EvidenceSnapshot> {
   try {
-    // 1. Run Research Agents in parallel using the user's chosen extractor model
-    const [agentAResults, agentBResults] = await Promise.all([
-      researchAgentA(claim, extractorModel),
-      researchAgentB(claim, extractorModel)
-    ]);
+    // 1. Run Research Agents in parallel for EVERY selected model
+    // To maintain the two-agent deduplication framework even if only 1 model is selected,
+    // we will run 1 agent per model. If they want variety, they select multiple models!
+    const searchPromises = extractorModels.map((model, index) => 
+      performSearchWithLLM(claim, model, `Agent ${index + 1} (${model.split('/').pop()})`)
+    );
+    
+    const resultsArray = await Promise.all(searchPromises);
+    const allRetrievedSources = resultsArray.flat();
 
     // 2. Source Validation & Deduplication
-    const finalSources = mergeAndValidateSources(agentAResults, agentBResults);
+    const finalSources = mergeAndValidateSources(allRetrievedSources);
 
     // 3. Compile Evidence Snapshot (Structured JSON format)
     const snapshot: EvidenceSnapshot = {
