@@ -378,7 +378,7 @@ function AnalyzeContent() {
 
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-screen overflow-hidden bg-background">
       {/* Top Navigation & Model Selector */}
       <header className="flex items-center justify-between border-b px-6 py-4 bg-card z-10 shrink-0">
         <div className="flex items-center gap-4">
@@ -485,7 +485,7 @@ function AnalyzeContent() {
 
         {/* Left Sidebar */}
         {leftSidebarOpen ? (
-          <div className="w-72 border-r bg-muted/10 flex flex-col hidden lg:flex transition-all">
+          <div className="w-72 border-r bg-muted/10 flex flex-col hidden lg:flex h-full transition-all">
             <div className="p-4 border-b">
               <button 
                 onClick={() => setInputCollapsed(!inputCollapsed)}
@@ -985,7 +985,7 @@ function AnalyzeContent() {
 
         {/* Right Sidebar */}
         {rightSidebarOpen ? (
-          <div className="w-80 border-l bg-muted/10 flex flex-col hidden lg:flex transition-all">
+          <div className="w-80 border-l bg-muted/10 flex flex-col hidden lg:flex h-full transition-all">
             <div className="p-6 pb-4 border-b">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-sm text-muted-foreground">GLOBAL CONSENSUS</h3>
@@ -1050,7 +1050,7 @@ function AnalyzeContent() {
             </div>
           </div>
         ) : (
-          <div className="w-12 border-l bg-muted/10 flex flex-col hidden lg:flex items-center py-4 transition-all">
+          <div className="w-12 border-l bg-muted/10 flex flex-col hidden lg:flex items-center py-4 h-full transition-all">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRightSidebarOpen(true)}>
               <PanelRightOpen className="w-5 h-5 text-muted-foreground" />
             </Button>
