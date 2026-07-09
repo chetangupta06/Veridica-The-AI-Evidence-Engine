@@ -90,38 +90,50 @@ export async function extractClaims(text: string, model: string): Promise<Extrac
 
 export async function analyzeClaim(claim: string, snapshot: EvidenceSnapshot, selectedModels: string[]): Promise<ModelAnalysisResult[]> {
   const client = getMeshClient();
-  const promises = selectedModels.map(async (model) => {
-    const response = await client.chat.completions.create({
-        model: model,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert fact-checking Reviewer. Analyze this claim using ONLY the provided Structured Evidence Snapshot (which has been gathered by Research Agents, validated, and deduplicated). Return JSON with: verdict (Mostly True / Partially True / Misleading / False / Insufficient Evidence), confidence (0-100), explanation, key_sources (array of objects with title, domain, credibility: High/Medium/Low)."
-          },
-          {
-            role: "user",
-            content: `Claim to analyze: ${claim}\n\nEvidence Snapshot:\n${JSON.stringify(snapshot, null, 2)}`
-          }
-        ],
-        temperature: 0.1,
-      });
+  const promises = selectedModels.map(async (model): Promise<ModelAnalysisResult | null> => {
+    try {
+      const response = await client.chat.completions.create({
+          model: model,
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert fact-checking Reviewer. Analyze this claim using ONLY the provided Structured Evidence Snapshot (which has been gathered by Research Agents, validated, and deduplicated). Return JSON with: verdict (Mostly True / Partially True / Misleading / False / Insufficient Evidence), confidence (0-100), explanation, key_sources (array of objects with title, domain, credibility: High/Medium/Low)."
+            },
+            {
+              role: "user",
+              content: `Claim to analyze: ${claim}\n\nEvidence Snapshot:\n${JSON.stringify(snapshot, null, 2)}`
+            }
+          ],
+          temperature: 0.1,
+        });
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error("Empty response");
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error("Empty response");
 
-      const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
-      const parsed = JSON.parse(cleanContent);
-      
-      return {
-        model,
-        verdict: parsed.verdict,
-        confidence: parsed.confidence,
-        explanation: parsed.explanation,
-        key_sources: parsed.key_sources || [],
-      };
+        const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
+        const parsed = JSON.parse(cleanContent);
+        
+        return {
+          model,
+          verdict: parsed.verdict,
+          confidence: parsed.confidence,
+          explanation: parsed.explanation,
+          key_sources: parsed.key_sources || [],
+        };
+    } catch (error: any) {
+      console.warn(`Model "${model}" failed:`, error?.message || error);
+      return null; // Skip this model gracefully
+    }
   });
 
-  return await Promise.all(promises);
+  const results = await Promise.all(promises);
+  const successfulResults = results.filter((r): r is ModelAnalysisResult => r !== null);
+  
+  if (successfulResults.length === 0) {
+    throw new Error(`All models failed. Please check your model IDs and API key.`);
+  }
+  
+  return successfulResults;
 }
 
 export async function analyzeMisconception(text: string, snapshot: EvidenceSnapshot, model: string): Promise<string> {
