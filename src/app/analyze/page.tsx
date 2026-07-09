@@ -206,7 +206,7 @@ function AnalyzeContent() {
   const runFullPipeline = async (text: string, modelsToUse: string[]) => {
     setLoadingState("extracting")
     try {
-      const result = await extractClaims(text, modelsToUse[0])
+      const result = await extractClaims(text, modelsToUse)
       setRidiculousnessScore(result.ridiculousnessScore)
       setIsHumorous(result.isHumorous)
       
