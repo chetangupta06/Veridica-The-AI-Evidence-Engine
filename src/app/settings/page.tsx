@@ -167,13 +167,11 @@ export default function SettingsPage() {
               </label>
               
               <Dialog>
-                <DialogTrigger>
-                  <div className="w-full md:w-1/2 flex items-center justify-between border rounded-md px-3 py-2 text-sm text-muted-foreground bg-background hover:bg-muted/50 transition-colors cursor-pointer text-left h-10">
-                    <span className="truncate">
-                      {sourceExtractorModels.length} model{sourceExtractorModels.length !== 1 ? 's' : ''} selected
-                    </span>
-                    <ChevronDown className="h-4 w-4 opacity-50" />
-                  </div>
+                <DialogTrigger className="w-full md:w-1/2 flex items-center justify-between border rounded-md px-3 py-2 text-sm text-muted-foreground bg-background hover:bg-muted/50 transition-colors cursor-pointer text-left h-10">
+                  <span className="truncate">
+                    {sourceExtractorModels.length} model{sourceExtractorModels.length !== 1 ? 's' : ''} selected
+                  </span>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
                 </DialogTrigger>
                 <DialogContent className="max-w-sm">
                   <DialogHeader>
