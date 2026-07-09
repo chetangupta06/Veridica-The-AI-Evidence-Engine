@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react"
+import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Brain } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { AboutModal } from "@/components/AboutModal"
@@ -465,20 +465,50 @@ function AnalyzeContent() {
                 {/* Middle Section: Split view */}
                 <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x border-b border-primary/10 relative z-10 bg-background/50 backdrop-blur-sm">
                   <div className="p-6 flex flex-col justify-center">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">Evidence Strength</h3>
-                    <div className="flex items-baseline gap-1 justify-center">
-                      {loadingState !== "done" ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                          <span className="text-2xl text-muted-foreground font-medium">Analyzing...</span>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2 text-center">Evidence Strength</h3>
+                    {loadingState !== "done" ? (
+                      <div className="flex items-center gap-2 justify-center h-32">
+                        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        <span className="text-2xl text-muted-foreground font-medium">Analyzing...</span>
+                      </div>
+                    ) : (
+                      <div className="relative flex flex-col items-center justify-center w-full h-32 mt-4">
+                        {/* Brain Icon in the center */}
+                        <div className="absolute top-[35px] flex flex-col items-center justify-center">
+                          <Brain className="w-10 h-10 text-muted-foreground/20 dark:text-muted-foreground/10 animate-pulse" />
+                          <span className="text-xl font-bold tracking-tight mt-1">{overallScore}</span>
                         </div>
-                      ) : (
-                        <>
-                          <span className={`text-8xl font-serif font-bold ${verdictStyle.color} tracking-tighter`}>{overallScore}</span>
-                          <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
-                        </>
-                      )}
-                    </div>
+                        <svg viewBox="0 0 120 70" className="w-48 h-28">
+                          {/* Dashed vertical line */}
+                          <line x1="60" y1="0" x2="60" y2="60" stroke="#ddd" strokeDasharray="2 2" className="stroke-muted-foreground/20 dark:stroke-muted-foreground/10" />
+                          {/* Dashed horizontal line */}
+                          <line x1="10" y1="60" x2="110" y2="60" stroke="#ddd" strokeDasharray="2 2" className="stroke-muted-foreground/20 dark:stroke-muted-foreground/10" />
+                          {/* Background Arc */}
+                          <path
+                            d="M 15 60 A 45 45 0 0 1 105 60"
+                            fill="none"
+                            stroke="currentColor"
+                            className="text-muted/20 dark:text-muted/10"
+                            strokeWidth={8}
+                            strokeLinecap="round"
+                          />
+                          {/* Foreground Arc */}
+                          <path
+                            d="M 15 60 A 45 45 0 0 1 105 60"
+                            fill="none"
+                            stroke={overallScore <= 30 ? "#ef4444" : overallScore <= 70 ? "#f59e0b" : "#10b981"}
+                            strokeWidth={8}
+                            strokeLinecap="round"
+                            strokeDasharray={Math.PI * 45}
+                            strokeDashoffset={Math.PI * 45 - (overallScore / 100) * (Math.PI * 45)}
+                            style={{ transition: "stroke-dashoffset 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)" }}
+                          />
+                        </svg>
+                        {/* Low / High Labels */}
+                        <div className="absolute top-[35px] left-[calc(50%-110px)] text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Low</div>
+                        <div className="absolute top-[35px] right-[calc(50%-110px)] text-[10px] font-bold text-muted-foreground uppercase tracking-wider">High</div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-6 flex flex-col justify-center border-t md:border-t-0 md:border-l border-primary/10">
