@@ -17,14 +17,16 @@ export type EvidenceSnapshot = {
 
 import { getMeshClient, trackUsage } from "./mesh";
 
-async function performSearchWithLLM(claim: string, model: string, agentName: string): Promise<RetrievedSource[]> {
+async function performSearchWithLLM(claim: string, model: string, agentName: string, realResults: any[]): Promise<RetrievedSource[]> {
   const client = getMeshClient();
+  const contextData = JSON.stringify(realResults, null, 2);
+  
   const response = await client.chat.completions.create({
     model: model,
     messages: [
       {
         role: "system",
-        content: `You are ${agentName}, a web research agent. For the given claim, search your knowledge base to retrieve 2-3 highly relevant, factual sources that provide evidence (supporting or refuting). Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), url (string absolute URL), title (string), snippet (string excerpt), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json.`
+        content: `You are ${agentName}, a web research agent. For the given claim, evaluate the provided REAL web search results. Select the 2-3 most highly relevant, factual sources that provide evidence (supporting or refuting). Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), url (string absolute URL), title (string), snippet (string excerpt), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json.\n\nREAL SEARCH RESULTS:\n${contextData}`
       },
       {
         role: "user",
@@ -87,11 +89,20 @@ function mergeAndValidateSources(allSources: RetrievedSource[]): RetrievedSource
 // Main Pipeline Entrypoint
 export async function gatherEvidence(claim: string, extractorModels: string[] = ["openai/gpt-4o-mini"]): Promise<EvidenceSnapshot> {
   try {
-    // 1. Run Research Agents in parallel for EVERY selected model
+    // 1. Fetch REAL search results from our backend
+    const searchRes = await fetch('/api/search', {
+      method: 'POST',
+      body: JSON.stringify({ query: claim }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const searchData = await searchRes.json();
+    const realResults = searchData.results || [];
+
+    // 2. Run Research Agents in parallel for EVERY selected model
     // To maintain the two-agent deduplication framework even if only 1 model is selected,
     // we will run 1 agent per model. If they want variety, they select multiple models!
     const searchPromises = extractorModels.map((model, index) => 
-      performSearchWithLLM(claim, model, `Agent ${index + 1} (${model.split('/').pop()})`)
+      performSearchWithLLM(claim, model, `Agent ${index + 1} (${model.split('/').pop()})`, realResults)
     );
     
     const resultsArray = await Promise.all(searchPromises);

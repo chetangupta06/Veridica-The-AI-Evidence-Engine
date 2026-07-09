@@ -515,7 +515,7 @@ function AnalyzeContent() {
             
             <div className="p-4 flex-1 flex flex-col min-h-0">
               <h3 className="font-semibold text-xs text-muted-foreground tracking-wider uppercase mb-4">Extracted Claims ({analyzedClaims.length})</h3>
-              <ScrollArea className="flex-1 -mx-4 px-4">
+              <ScrollArea className="flex-1 -mx-4 px-4 scrollbar-hide">
                 <div className="space-y-2.5 animate-in slide-in-from-left-4 fade-in duration-700">
                   {analyzedClaims.map((claim) => (
                     <Card key={claim.id} className="border-l-4 rounded-xl transition-all hover:shadow-sm" style={{ borderLeftColor: getVerdictStyle(claim.aggregatedVerdict).indicator }}>
@@ -538,7 +538,7 @@ function AnalyzeContent() {
 
         {/* Main Area: Heatmap, Score, Verdicts */}
         <div className="flex-1 bg-background relative flex flex-col min-w-0">
-          <div className="absolute inset-0 overflow-y-auto pb-32">
+          <div className="absolute inset-0 overflow-y-auto scrollbar-hide pb-32">
             <div key={loadingState} id="pdf-report-content" className="max-w-7xl mx-auto p-8 space-y-6 pb-32 animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both">
               
               {/* PDF Header (Hidden normally, shown during print) */}
@@ -1018,8 +1018,7 @@ function AnalyzeContent() {
             
             <div className="p-6 flex-1 flex flex-col min-h-0 animate-in slide-in-from-right-4 fade-in duration-700 delay-100">
               <h3 className="font-semibold text-sm text-muted-foreground mb-4 shrink-0">CITED SOURCES ({allSources.length})</h3>
-              <div className="flex-1 relative min-h-0 -mx-2 px-2">
-                <ScrollArea className="absolute inset-0">
+              <div className="flex-1 overflow-y-auto scrollbar-hide min-h-0 -mx-2 px-2">
                   <div className="space-y-4 pr-3">
                     {allSources.length === 0 && <div className="text-xs text-muted-foreground text-center">No sources cited.</div>}
                   {allSources.map((source, i) => (
@@ -1045,7 +1044,6 @@ function AnalyzeContent() {
                     </a>
                   ))}
                   </div>
-                </ScrollArea>
               </div>
             </div>
           </div>
