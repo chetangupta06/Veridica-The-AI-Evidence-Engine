@@ -65,7 +65,7 @@ export type ExtractionResult = {
   isHumorous: boolean;
 };
 
-export async function extractClaims(text: string, modelsToUse: string[]): Promise<ExtractionResult> {
+export async function extractClaims(text: string, image: string | null, modelsToUse: string[]): Promise<ExtractionResult> {
   const client = getMeshClient();
   let lastError: any;
 
@@ -76,11 +76,14 @@ export async function extractClaims(text: string, modelsToUse: string[]): Promis
           messages: [
             {
               role: "system",
-              content: "Extract all verifiable factual claims, statistics, dates, names, and quotes from the text. Return as a clean JSON object with three keys: 'claims' (an array of objects with 'text', 'verdict' (TRUE, FALSE, or UNVERIFIABLE), 'confidence' (0-100), and 'explanation'), 'ridiculousnessScore' (0-100 score indicating how absurd, novelty, or ridiculous the overall text is), and 'isHumorous' (boolean flag indicating if the input is obviously silly or a joke). Do not wrap the JSON in markdown blocks like ```json."
+              content: `You are an expert data extractor. The current year is ${new Date().getFullYear()}. Extract all verifiable factual claims, statistics, dates, names, and quotes from the text. IMPORTANT: Every extracted claim MUST be fully self-contained and retain the specific context of the original text. Do not extract generic statements (e.g., "Governments suppressed news") without their specific subject matter (e.g., "Governments suppressed news about CERN creating a black hole"). Return as a clean JSON object with three keys: 'claims' (an array of objects with 'text', 'verdict' (TRUE, FALSE, or UNVERIFIABLE), 'confidence' (0-100), and 'explanation'), 'ridiculousnessScore' (0-100 score indicating how absurd, novelty, or ridiculous the overall text is), and 'isHumorous' (boolean flag indicating if the input is obviously silly or a joke). Do not wrap the JSON in markdown blocks like \`\`\`json.`
             },
             {
               role: "user",
-              content: text
+              content: image ? [
+                { type: "text", text: text || "Extract claims from this image." },
+                { type: "image_url", image_url: { url: image } }
+              ] : text
             }
           ],
           temperature: 0.2,
@@ -127,7 +130,7 @@ export async function analyzeClaim(claim: string, snapshot: EvidenceSnapshot, se
           messages: [
             {
               role: "system",
-              content: "You are an expert fact-checking Reviewer. Analyze this claim using ONLY the provided Structured Evidence Snapshot (which has been gathered by Research Agents, validated, and deduplicated). Return JSON with: verdict (Mostly True / Partially True / Misleading / False / Insufficient Evidence), confidence (0-100), explanation, key_sources (array of objects with title, domain, credibility: High/Medium/Low)."
+              content: `You are an expert fact-checking Reviewer. The current year is ${new Date().getFullYear()}. Analyze this claim primarily using the provided Structured Evidence Snapshot. If the snapshot lacks sufficient evidence, you MUST use your own expert internal knowledge to fact-check the claim. Return JSON with: verdict (Choose exactly one: True, Mostly True, Mixed, Mostly False, False, or Unverifiable), confidence (0-100), explanation, key_sources (array of objects with title, domain, credibility: High/Medium/Low).`
             },
             {
               role: "user",
@@ -177,7 +180,7 @@ export async function analyzeMisconception(text: string, snapshot: EvidenceSnaps
     messages: [
       {
         role: "system",
-        content: "You are an expert researcher. The user's input contains a claim or claims that have been determined to be partially or wholly false. Based on the provided evidence, concisely explain 'Why people believe this' (i.e. the origin of the misconception, a grain of truth that was distorted, or common confusion). Return ONLY a single paragraph of plain text explanation, nothing else."
+        content: "You are an expert researcher. The user's input contains a claim or claims that have been determined to be partially or wholly false. Based on the provided evidence, concisely explain 'Why people believe this' (i.e. the origin of the misconception, a grain of truth that was distorted, or common confusion). Return ONLY 1 to 2 very short, punchy sentences of plain text explanation. Be extremely concise. Do not write long paragraphs."
       },
       {
         role: "user",

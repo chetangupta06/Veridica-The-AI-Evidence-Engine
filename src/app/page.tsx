@@ -1,24 +1,39 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles, ChevronDown, Check, Plus, X, Trash2 } from "lucide-react"
+import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles, ChevronDown, Check, Plus, X, Trash2, History, PanelLeftClose, PanelLeftOpen, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { AboutModal } from "@/components/AboutModal"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
-import { Input } from "@/components/ui/input"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { Switch } from "@/components/ui/switch"
+import { ModelSelector } from "@/components/ModelSelector"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { useMeshModels } from "@/lib/useMeshModels"
+import { determineOptimalModels } from "@/lib/smartRouter"
+
+type HistoryItem = {
+  id: string;
+  type: "text" | "url" | "file";
+  content: string;
+  date: number;
+}
 
 export default function Home() {
   const router = useRouter()
   const [claimText, setClaimText] = useState("")
+  const [isRecording, setIsRecording] = useState(false)
+  const recognitionRef = useRef<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [urlInput, setUrlInput] = useState("")
   const [fileParsing, setFileParsing] = useState(false)
+  
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   
   const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
   const DEFAULT_DISPLAY_NAMES: Record<string, string> = {
@@ -27,92 +42,164 @@ export default function Home() {
     "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite"
   }
   
-  const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
-  const [newModelId, setNewModelId] = useState("")
-  const [newModelName, setNewModelName] = useState("")
-  const [showAddForm, setShowAddForm] = useState(false)
-  
-  // Combine default + custom models
-  const allModels = [...DEFAULT_MODELS, ...customModels.map(m => m.id)]
   const getDisplayName = (modelId: string) => {
     if (DEFAULT_DISPLAY_NAMES[modelId]) return DEFAULT_DISPLAY_NAMES[modelId];
-    const custom = customModels.find(m => m.id === modelId);
-    return custom?.name || modelId.split('/').pop() || modelId;
+    return modelId.split('/').pop() || modelId;
   }
   
   const [smartRouting, setSmartRouting] = useState(true)
   const [selectedModels, setSelectedModels] = useState<string[]>([DEFAULT_MODELS[0]])
-  const [modelDialogOpen, setModelDialogOpen] = useState(false)
-  const [tempSelectedModels, setTempSelectedModels] = useState<string[]>([DEFAULT_MODELS[0]])
+
+  const [apiKey, setApiKey] = useState("")
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem("veridica_api_key")
+    if (savedApiKey) setApiKey(savedApiKey)
+  }, [])
+
+  const { models: availableModels } = useMeshModels(apiKey)
 
   useEffect(() => {
-    // Load custom models from localStorage
-    let loadedCustomModels: { id: string; name: string }[] = [];
-    const savedModels = localStorage.getItem("veridica_custom_models")
-    if (savedModels) {
-      try { 
-        loadedCustomModels = JSON.parse(savedModels);
-        setCustomModels(loadedCustomModels) 
+    if (typeof window !== "undefined") {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recog = new SpeechRecognition();
+        recog.continuous = false;
+        recog.interimResults = false;
+        recognitionRef.current = recog;
+      }
+    }
+
+    const savedSettings = localStorage.getItem("veridica_settings")
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings)
+        if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
+        if (parsed.selectedModels && Array.isArray(parsed.selectedModels)) {
+          setSelectedModels(parsed.selectedModels)
+        }
       } catch (e) {}
     }
-    
-    const validIds = [...DEFAULT_MODELS, ...loadedCustomModels.map(m => m.id)];
 
+    const savedHistory = localStorage.getItem("veridica_history")
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory))
+      } catch (e) {}
+    }
+  }, []);
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) {
+      toast.error("Speech recognition not supported in this browser.");
+      return;
+    }
+    
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      const recog = recognitionRef.current;
+      const initialText = claimText ? claimText + " " : "";
+      
+      recog.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setClaimText(initialText + transcript);
+      };
+
+      recog.onerror = (event: any) => {
+        setIsRecording(false);
+        if (event.error !== 'no-speech') {
+          let errorMsg = event.error;
+          if (event.error === 'network') {
+            errorMsg = "Network error. This often happens in browsers (like Brave) that block speech recognition, or when offline.";
+          } else if (event.error === 'not-allowed') {
+            errorMsg = "Microphone access denied. Please allow microphone permissions in your browser.";
+          }
+          toast.error("Microphone error", { description: errorMsg });
+        }
+      };
+      
+      recog.onend = () => {
+        setIsRecording(false);
+      };
+
+      recog.start();
+      setIsRecording(true);
+    }
+  }
+
+  useEffect(() => {
     const saved = localStorage.getItem("veridica_settings")
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
-        
-        // Scrub default model to ensure it still exists
-        if (parsed.defaultModel && validIds.includes(parsed.defaultModel)) {
-          setSelectedModels([parsed.defaultModel])
-        } else {
-          setSelectedModels([DEFAULT_MODELS[0]])
+        if (parsed.selectedModels && Array.isArray(parsed.selectedModels)) {
+          setSelectedModels(parsed.selectedModels)
         }
       } catch (e) {}
     }
-  }, [])
-  
-  const addCustomModel = () => {
-    const id = newModelId.trim();
-    if (!id) return;
-    if (allModels.includes(id)) {
-      toast.error("This model already exists.");
-      return;
+
+    const savedHistory = localStorage.getItem("veridica_history")
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory))
+      } catch (e) {}
     }
-    const name = newModelName.trim() || id.split('/').pop() || id;
-    const updated = [...customModels, { id, name }];
-    setCustomModels(updated);
-    localStorage.setItem("veridica_custom_models", JSON.stringify(updated));
-    setTempSelectedModels(prev => [...prev, id]);
-    setNewModelId("");
-    setNewModelName("");
-    setShowAddForm(false);
-    toast.success(`Added ${name}`);
+  }, [])
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error("Only images are supported")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setUploadedImage(event.target.result)
+      }
+    }
+    reader.readAsDataURL(file)
   }
   
-  const removeCustomModel = (modelId: string) => {
-    const updated = customModels.filter(m => m.id !== modelId);
-    setCustomModels(updated);
-    localStorage.setItem("veridica_custom_models", JSON.stringify(updated));
-    setTempSelectedModels(prev => prev.filter(x => x !== modelId));
-    setSelectedModels(prev => prev.filter(x => x !== modelId));
-  }
+  const handleAnalyze = (type: "text" | "url" | "file", content: string, skipHistory = false) => {
+    if (!content.trim() && !uploadedImage) return;
 
-  const handleAnalyze = (type: "text" | "url" | "file", content: string) => {
-    if (!content.trim()) return;
+    if (!skipHistory) {
+      const newItem: HistoryItem = {
+        id: Date.now().toString(),
+        type,
+        content,
+        date: Date.now()
+      }
+      const updatedHistory = [newItem, ...history].slice(0, 50)
+      setHistory(updatedHistory)
+      localStorage.setItem("veridica_history", JSON.stringify(updatedHistory))
+    }
 
-    // Save to session storage
+    let finalModels = selectedModels;
+    if (smartRouting) {
+      const hasImage = !!uploadedImage || type === "file";
+      const availableModelsList = availableModels.map(m => typeof m === 'string' ? m : (m as any).id || "");
+      finalModels = determineOptimalModels(content, hasImage, availableModelsList);
+    }
+
     sessionStorage.setItem("veridica_input", JSON.stringify({ 
-      type, 
+      type: uploadedImage ? "file" : type, 
       content,
+      image: uploadedImage,
       smartRouting,
-      selectedModels
+      selectedModels: finalModels
     }))
     
     toast.success("Claim loaded. Route established to Mesh API.");
-    // Navigate to analyze page
     router.push("/analyze")
   }
 
@@ -122,30 +209,36 @@ export default function Home() {
     toast.info("Demo claim loaded.");
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setFileParsing(true)
-      // Mock parsing a file
-      setTimeout(() => {
-        setFileParsing(false)
-        handleAnalyze("file", `[Parsed from ${file.name}]: Coffee stunts your growth and causes spikes in blood pressure.`)
-      }, 1500)
-    }
-  }
-
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 relative">
-      {/* Top Navbar */}
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-end items-center gap-2 md:gap-4">
-        <ThemeToggle />
-        <AboutModal />
-        <Link href="https://github.com/chetangupta06/Veridica-The-AI-Evidence-Engine" target="_blank" rel="noreferrer">
-          <Button variant="ghost" size="icon">
-            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-muted-foreground hover:text-foreground"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex min-h-screen bg-background w-full">
+
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col bg-background relative">
+        {/* Top Navbar */}
+        <div className="w-full p-4 border-b flex justify-between items-center gap-2 md:gap-4 shrink-0 h-[73px] sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex items-center">
+            <span className="text-xl font-bold font-serif tracking-tight ml-2 md:ml-4 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              Veridica
+            </span>
+          </div>
+          <div className="flex items-center gap-2 md:gap-4">
+            <Button variant="ghost" onClick={() => router.push("/settings")} className="text-sm text-muted-foreground hover:text-foreground transition-colors md:mr-2">
+              Configure API & Models
+            </Button>
+            <ThemeToggle />
+            <AboutModal />
+            <Link href="https://github.com/chetangupta06/Veridica-The-AI-Evidence-Engine" target="_blank" rel="noreferrer">
+              <Button variant="ghost" size="icon">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-muted-foreground hover:text-foreground"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Centered Content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-12 w-full">
 
       {/* Hero Section */}
       <div className="w-full max-w-4xl text-center mb-12 mt-12">
@@ -163,421 +256,104 @@ export default function Home() {
       </div>
 
       {/* Input Area */}
-      <div className="w-full max-w-3xl bg-card rounded-xl border shadow-lg p-2 md:p-4">
-        <Tabs defaultValue="text" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-4 bg-muted/50">
-            <TabsTrigger value="text" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Text</span>
-            </TabsTrigger>
-            <TabsTrigger value="url" className="flex items-center gap-2">
-              <LinkIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">URL</span>
-            </TabsTrigger>
-            <TabsTrigger value="upload" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Upload</span>
-            </TabsTrigger>
-            <TabsTrigger value="voice" className="flex items-center gap-2">
-              <Mic className="h-4 w-4" />
-              <span className="hidden sm:inline">Voice</span>
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="text" className="mt-0 flex flex-col h-auto">
-            <Textarea
-              placeholder="E.g., 'Coffee stunts your growth' or 'Electric cars produce more emissions over their lifetime than gas cars...'"
-              className="flex-1 min-h-[120px] text-lg resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent p-4"
-              value={claimText}
-              onChange={(e) => setClaimText(e.target.value)}
+      <div className="w-full max-w-3xl bg-card rounded-xl border shadow-lg flex flex-col p-2 md:p-4">
+        <div className="relative w-full">
+          <Textarea
+            placeholder="E.g., 'Coffee stunts your growth' or 'Electric cars produce more emissions over their lifetime than gas cars...'"
+            className="flex-1 min-h-[120px] text-lg resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent p-4 pr-12 pb-12 w-full"
+            value={claimText}
+            onChange={(e) => setClaimText(e.target.value)}
+          />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleRecording}
+            className={`absolute top-2 right-2 rounded-full h-9 w-9 transition-colors ${isRecording ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
+            title="Voice Input"
+          >
+            <Mic className={`h-5 w-5 ${isRecording ? 'animate-pulse' : ''}`} />
+          </Button>
+        </div>
+        <div className="flex items-center justify-between border-t border-border/50 p-3 mt-2">
+          <div className="flex items-center gap-2">
+            <input 
+              type="file" 
+              accept="image/*"
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleImageUpload} 
             />
-            <div className="flex items-center justify-between border-t p-4 mt-2">
-              <div className="text-sm text-muted-foreground">
-                {claimText.length} characters
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-full"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            {uploadedImage && (
+              <div className="relative w-8 h-8 rounded overflow-hidden border">
+                <img src={uploadedImage} alt="Uploaded" className="w-full h-full object-cover" />
+                <button 
+                  onClick={() => setUploadedImage(null)}
+                  className="absolute -top-1 -right-1 bg-background rounded-full border shadow-sm w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3 h-3" />
+                </button>
               </div>
-              <Button 
-                onClick={() => handleAnalyze("text", claimText)}
-                disabled={!claimText.trim()}
-                size="lg" 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-12 rounded-full"
-              >
-                Analyze Claim
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+            )}
+            <div className="text-xs text-muted-foreground font-medium hidden sm:block ml-2">
+              {claimText.length} characters
             </div>
-
-            {/* Smart Routing & Model Selection */}
-            <div className="border-t border-border/30 pt-4 pb-2 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/5 rounded-b-xl">
-              <div className="flex items-center gap-3">
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 hidden sm:flex mr-2">
                 <Switch 
-                  id="smart-routing-text" 
+                  id="smart-routing-inline" 
                   checked={smartRouting} 
-                  onCheckedChange={(checked) => setSmartRouting(checked)} 
+                  onCheckedChange={(checked) => {
+                    setSmartRouting(checked)
+                    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting: checked, selectedModels }))
+                  }} 
+                  className="scale-75 data-[state=checked]:bg-primary"
                 />
-                <label htmlFor="smart-routing-text" className="text-xs font-bold text-foreground/85 cursor-pointer uppercase tracking-wider select-none">
+                <label htmlFor="smart-routing-inline" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer select-none">
                   Smart Routing
                 </label>
-                <span className="text-[10px] text-muted-foreground/80 font-semibold">
-                  {smartRouting ? "(Consensus Agreement Mode)" : "(Manual model selection)"}
-                </span>
               </div>
 
               {!smartRouting && (
-                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-1 duration-200">
-                  <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
-                    <DialogTrigger>
-                      <button
-                        onClick={() => setTempSelectedModels([...selectedModels])}
-                        className="text-[11px] px-4 py-2 rounded-full border border-border/50 font-bold tracking-wide transition-all uppercase flex items-center gap-2 bg-muted/10 hover:bg-muted/20 hover:border-primary/40 text-foreground/80"
-                      >
-                        Select Models
-                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle>Select AI Models</DialogTitle>
-                        <DialogDescription>
-                          Choose models for verification. Use the MESH API format: <code className="text-[10px] bg-muted/50 px-1 py-0.5 rounded">provider/model-name</code>
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-2.5 py-4 max-h-[320px] overflow-y-auto">
-                        {allModels.map((m) => {
-                          const isChecked = tempSelectedModels.includes(m);
-                          const isCustom = !DEFAULT_MODELS.includes(m);
-                          return (
-                            <button
-                              key={m}
-                              onClick={() => {
-                                if (isChecked) {
-                                  if (tempSelectedModels.length > 1) {
-                                    setTempSelectedModels(prev => prev.filter(x => x !== m));
-                                  }
-                                } else {
-                                  setTempSelectedModels(prev => [...prev, m]);
-                                }
-                              }}
-                              className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left group ${
-                                isChecked 
-                                  ? "border-primary bg-primary/5 shadow-sm" 
-                                  : "border-border/30 bg-card hover:border-border/60"
-                              }`}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-bold text-foreground flex items-center gap-2">
-                                  {getDisplayName(m)}
-                                  {isCustom && (
-                                    <span className="text-[8px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider">Custom</span>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground font-medium mt-0.5 truncate">{m}</div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {isCustom && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); removeCustomModel(m); }}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/10 rounded-md"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                  </button>
-                                )}
-                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                                  isChecked 
-                                    ? "bg-primary border-primary" 
-                                    : "border-border/50"
-                                }`}>
-                                  {isChecked && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      
-                      {/* Add Model Form */}
-                      {!showAddForm ? (
-                        <button
-                          onClick={() => setShowAddForm(true)}
-                          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-border/50 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-all"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add Custom Model
-                        </button>
-                      ) : (
-                        <div className="space-y-3 p-4 rounded-xl border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Add Model</span>
-                            <button onClick={() => { setShowAddForm(false); setNewModelId(""); setNewModelName(""); }} className="p-1 hover:bg-muted/30 rounded-md">
-                              <X className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                          </div>
-                          <Input
-                            placeholder="provider/model-name  (e.g. mistralai/mistral-7b)"
-                            value={newModelId}
-                            onChange={(e) => setNewModelId(e.target.value)}
-                            className="text-sm h-9"
-                          />
-                          <Input
-                            placeholder="Display name (optional)"
-                            value={newModelName}
-                            onChange={(e) => setNewModelName(e.target.value)}
-                            className="text-sm h-9"
-                          />
-                          <Button
-                            onClick={addCustomModel}
-                            disabled={!newModelId.trim()}
-                            size="sm"
-                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-9 text-xs"
-                          >
-                            <Plus className="w-3.5 h-3.5 mr-1.5" />
-                            Add Model
-                          </Button>
-                        </div>
-                      )}
-                      
-                      <Button
-                        onClick={() => {
-                          setSelectedModels([...tempSelectedModels]);
-                          setModelDialogOpen(false);
-                          setShowAddForm(false);
-                        }}
-                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-11 mt-2"
-                      >
-                        Confirm ({tempSelectedModels.length} {tempSelectedModels.length === 1 ? "model" : "models"})
-                      </Button>
-                    </DialogContent>
-                  </Dialog>
-                  
-                  <div className="flex gap-1.5">
-                    {selectedModels.map(m => (
-                      <span key={m} className="text-[9px] px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-extrabold uppercase tracking-wider">
-                        {getDisplayName(m)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {smartRouting && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/85 font-semibold animate-in fade-in slide-in-from-left-1 duration-200">
-                  <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span>Consensus on GPT, Claude & Gemini</span>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="url" className="mt-0 flex flex-col h-auto">
-            <div className="flex-1 p-4 flex items-center justify-center min-h-[100px]">
-              <Input 
-                type="url" 
-                placeholder="https://example.com/article" 
-                className="text-lg py-6"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center justify-end border-t p-4 mt-2">
-              <Button 
-                onClick={() => handleAnalyze("url", urlInput)}
-                disabled={!urlInput.trim()}
-                size="lg" 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-12 rounded-full"
-              >
-                Analyze URL
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Smart Routing & Model Selection */}
-            <div className="border-t border-border/30 pt-4 pb-2 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/5 rounded-b-xl">
-              <div className="flex items-center gap-3">
-                <Switch 
-                  id="smart-routing-url" 
-                  checked={smartRouting} 
-                  onCheckedChange={(checked) => setSmartRouting(checked)} 
+                <ModelSelector 
+                  selectedModels={selectedModels}
+                  onSelectedModelsChange={(models) => {
+                    const toSet = models.length > 0 ? models : [DEFAULT_MODELS[0]];
+                    setSelectedModels(toSet);
+                    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, selectedModels: toSet }));
+                  }}
+                  triggerClassName="text-xs font-semibold text-foreground/80 hover:text-foreground flex items-center gap-1 transition-colors bg-muted/30 px-3 py-1.5 rounded-full hover:bg-muted/50 border border-transparent hover:border-border"
+                  triggerContent={
+                    <>
+                      {selectedModels.length === 1 ? getDisplayName(selectedModels[0]) : `${selectedModels.length} Models`}
+                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                    </>
+                  }
                 />
-                <label htmlFor="smart-routing-url" className="text-xs font-bold text-foreground/85 cursor-pointer uppercase tracking-wider select-none">
-                  Smart Routing
-                </label>
-                <span className="text-[10px] text-muted-foreground/80 font-semibold">
-                  {smartRouting ? "(Consensus Agreement Mode)" : "(Manual model selection)"}
-                </span>
-              </div>
-
-              {!smartRouting && (
-                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-1 duration-200">
-                  <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
-                    <DialogTrigger>
-                      <button
-                        onClick={() => setTempSelectedModels([...selectedModels])}
-                        className="text-[11px] px-4 py-2 rounded-full border border-border/50 font-bold tracking-wide transition-all uppercase flex items-center gap-2 bg-muted/10 hover:bg-muted/20 hover:border-primary/40 text-foreground/80"
-                      >
-                        Select Models
-                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle>Select AI Models</DialogTitle>
-                        <DialogDescription>
-                          Choose models for verification. Use the MESH API format: <code className="text-[10px] bg-muted/50 px-1 py-0.5 rounded">provider/model-name</code>
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-2.5 py-4 max-h-[320px] overflow-y-auto">
-                        {allModels.map((m) => {
-                          const isChecked = tempSelectedModels.includes(m);
-                          const isCustom = !DEFAULT_MODELS.includes(m);
-                          return (
-                            <button
-                              key={m}
-                              onClick={() => {
-                                if (isChecked) {
-                                  if (tempSelectedModels.length > 1) {
-                                    setTempSelectedModels(prev => prev.filter(x => x !== m));
-                                  }
-                                } else {
-                                  setTempSelectedModels(prev => [...prev, m]);
-                                }
-                              }}
-                              className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left group ${
-                                isChecked 
-                                  ? "border-primary bg-primary/5 shadow-sm" 
-                                  : "border-border/30 bg-card hover:border-border/60"
-                              }`}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-bold text-foreground flex items-center gap-2">
-                                  {getDisplayName(m)}
-                                  {isCustom && (
-                                    <span className="text-[8px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider">Custom</span>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground font-medium mt-0.5 truncate">{m}</div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {isCustom && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); removeCustomModel(m); }}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/10 rounded-md"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                  </button>
-                                )}
-                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                                  isChecked 
-                                    ? "bg-primary border-primary" 
-                                    : "border-border/50"
-                                }`}>
-                                  {isChecked && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      
-                      {/* Add Model Form */}
-                      {!showAddForm ? (
-                        <button
-                          onClick={() => setShowAddForm(true)}
-                          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-border/50 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-all"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add Custom Model
-                        </button>
-                      ) : (
-                        <div className="space-y-3 p-4 rounded-xl border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Add Model</span>
-                            <button onClick={() => { setShowAddForm(false); setNewModelId(""); setNewModelName(""); }} className="p-1 hover:bg-muted/30 rounded-md">
-                              <X className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                          </div>
-                          <Input
-                            placeholder="provider/model-name  (e.g. mistralai/mistral-7b)"
-                            value={newModelId}
-                            onChange={(e) => setNewModelId(e.target.value)}
-                            className="text-sm h-9"
-                          />
-                          <Input
-                            placeholder="Display name (optional)"
-                            value={newModelName}
-                            onChange={(e) => setNewModelName(e.target.value)}
-                            className="text-sm h-9"
-                          />
-                          <Button
-                            onClick={addCustomModel}
-                            disabled={!newModelId.trim()}
-                            size="sm"
-                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-9 text-xs"
-                          >
-                            <Plus className="w-3.5 h-3.5 mr-1.5" />
-                            Add Model
-                          </Button>
-                        </div>
-                      )}
-                      
-                      <Button
-                        onClick={() => {
-                          setSelectedModels([...tempSelectedModels]);
-                          setModelDialogOpen(false);
-                          setShowAddForm(false);
-                        }}
-                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full h-11 mt-2"
-                      >
-                        Confirm ({tempSelectedModels.length} {tempSelectedModels.length === 1 ? "model" : "models"})
-                      </Button>
-                    </DialogContent>
-                  </Dialog>
-                  
-                  <div className="flex gap-1.5">
-                    {selectedModels.map(m => (
-                      <span key={m} className="text-[9px] px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-extrabold uppercase tracking-wider">
-                        {getDisplayName(m)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {smartRouting && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/85 font-semibold animate-in fade-in slide-in-from-left-1 duration-200">
-                  <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span>Consensus on GPT, Claude & Gemini</span>
-                </div>
               )}
             </div>
-          </TabsContent>
 
-          <TabsContent value="upload" className="mt-0 flex flex-col h-[200px]">
-            <div className="flex-1 p-4 flex items-center justify-center">
-              <div className="relative flex flex-col items-center justify-center w-full h-full border-2 border-dashed rounded-lg border-muted hover:border-primary/50 transition-colors bg-muted/20">
-                <input 
-                  type="file" 
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  onChange={handleFileUpload}
-                  disabled={fileParsing}
-                  accept=".pdf,.png,.jpg,.jpeg,.txt"
-                />
-                <FileText className="w-8 h-8 text-muted-foreground mb-2" />
-                <p className="text-muted-foreground font-medium">
-                  {fileParsing ? "Extracting text via OCR..." : "Click or drag and drop a document here"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">Supports PDF, TXT, Images</p>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="voice" className="mt-0 flex flex-col h-[200px]">
-            <div className="flex-1 p-4 flex flex-col items-center justify-center gap-4">
-              <Button variant="outline" size="icon" className="h-16 w-16 rounded-full border-primary/50 text-primary hover:bg-primary/10 hover:text-primary">
-                <Mic className="h-8 w-8" />
-              </Button>
-              <p className="text-muted-foreground">Click to start speaking (Coming Soon)</p>
-            </div>
-          </TabsContent>
-        </Tabs>
+            <Button 
+              onClick={() => handleAnalyze("text", claimText)}
+              disabled={!claimText.trim()}
+              size="sm" 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-9 rounded-full text-xs transition-transform hover:scale-105"
+            >
+              Analyze
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
       </div>
       
       <div className="mt-8 flex items-center justify-center gap-4 animate-in slide-in-from-bottom-4 fade-in duration-700">
@@ -587,11 +363,67 @@ export default function Home() {
         </Button>
       </div>
 
-      <div className="mt-16 text-center">
-        <Button variant="link" onClick={() => router.push("/settings")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-          Configure API & Models
-        </Button>
-      </div>
+      {/* Session History FAB & Dialog */}
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogTrigger className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 h-14 px-6 rounded-full shadow-lg border border-primary/30 bg-background/95 backdrop-blur hover:bg-muted/50 transition-all group flex items-center justify-center cursor-pointer text-sm">
+          <History className="w-5 h-5 mr-2 text-primary group-hover:scale-110 transition-transform" />
+          <span className="font-semibold text-foreground/90">Session History</span>
+        </DialogTrigger>
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 border-primary/20">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-4 h-4 text-primary" />
+              Session History
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {history.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center mt-10">No history yet</div>
+            ) : (
+              history.map(item => (
+                <div 
+                  key={item.id} 
+                  onClick={() => {
+                    setIsHistoryDialogOpen(false);
+                    if (item.type === 'text') setClaimText(item.content);
+                    else if (item.type === 'url') setUrlInput(item.content);
+                    handleAnalyze(item.type, item.content, true);
+                  }}
+                  className="p-3 rounded-lg border bg-background hover:border-primary/50 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    {item.type === 'text' && <FileText className="w-3.5 h-3.5 text-primary" />}
+                    {item.type === 'url' && <LinkIcon className="w-3.5 h-3.5 text-primary" />}
+                    {item.type === 'file' && <FileText className="w-3.5 h-3.5 text-primary" />}
+                    <span className="text-xs font-medium text-muted-foreground capitalize">{item.type}</span>
+                    <span className="text-[10px] text-muted-foreground/60 ml-auto">{new Date(item.date).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-sm text-foreground/90 font-medium line-clamp-3 leading-snug">
+                    {item.content}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+          {history.length > 0 && (
+            <div className="p-4 border-t bg-muted/10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
+                onClick={() => {
+                  setHistory([]);
+                  localStorage.removeItem("veridica_history");
+                }}
+              >
+                Clear History
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  </div>
+</div>
   )
 }

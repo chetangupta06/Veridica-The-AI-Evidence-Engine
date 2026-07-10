@@ -19,6 +19,8 @@ import { useRouter } from "next/navigation"
 import React, { Suspense, useEffect, useState, useMemo, Fragment } from "react"
 import { extractClaims, analyzeClaim, analyzeMisconception, type ExtractedClaim, type ClaimAnalysis, type ModelAnalysisResult } from "@/lib/mesh"
 import { gatherEvidence, type EvidenceSnapshot } from "@/lib/retriever"
+import { useMeshModels } from "@/lib/useMeshModels"
+import { determineOptimalModels, determineOptimalExtractors } from "@/lib/smartRouter"
 
 const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
 const DEFAULT_DISPLAY_NAMES: Record<string, string> = {
@@ -106,11 +108,12 @@ const HeatmapText = ({ text, claims }: { text: string, claims: ClaimAnalysis[] }
 
 function AnalyzeContent() {
   const router = useRouter()
+  const [apiKey] = useState("");
+  const { models: availableModels } = useMeshModels(apiKey);
   const [smartRouting, setSmartRouting] = useState(true)
+  const [smartExtractorRouting, setSmartExtractorRouting] = useState(true)
   const [selectedModels, setSelectedModels] = useState<string[]>([DEFAULT_MODELS[0]])
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  
-  // Custom models from localStorage
   const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
   const allModels = [...DEFAULT_MODELS, ...customModels.map(m => m.id)]
   const getDisplayName = (modelId: string) => {
@@ -120,6 +123,7 @@ function AnalyzeContent() {
   }
   
   const [originalInput, setOriginalInput] = useState("")
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "retrieving" | "analyzing" | "done">("idle")
   
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true)
@@ -138,8 +142,27 @@ function AnalyzeContent() {
   const [expandedClaims, setExpandedClaims] = useState<Record<number, boolean>>({})
   const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>({})
   const [sourceExtractorModels, setSourceExtractorModels] = useState<string[]>(["openai/gpt-4o-mini"])
+  
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<{role: string; content: string}[]>([])
+  const [chatModel, setChatModel] = useState<string>("")
+  const [chatInput, setChatInput] = useState("")
+  const [isChatLoading, setIsChatLoading] = useState(false)
+  const [isChatOpen, setIsChatOpen] = useState(false)
 
-  const activeModels = smartRouting ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] : selectedModels;
+  const activeModels = useMemo(() => {
+    if (smartRouting && originalInput) {
+      const availableModelsList = availableModels.map(m => typeof m === 'string' ? m : (m as any).id || "");
+      return determineOptimalModels(originalInput, !!uploadedImage, availableModelsList); 
+    }
+    return selectedModels.length > 0 ? selectedModels : [DEFAULT_MODELS[0]];
+  }, [smartRouting, originalInput, uploadedImage, selectedModels, availableModels]);
+
+  useEffect(() => {
+    if (!chatModel && activeModels.length > 0) {
+      setChatModel(activeModels[0]);
+    }
+  }, [activeModels, chatModel]);
 
   useEffect(() => {
     // Load custom models from localStorage
@@ -173,21 +196,25 @@ function AnalyzeContent() {
     if (payloadStr) {
       try {
         const payload = JSON.parse(payloadStr)
-        let textToAnalyze = payload.content
-        if (payload.type === "url") {
-          textToAnalyze = `[Fetched from URL: ${payload.content}] Coffee stunts your growth and decreases bone density. Caffeine can cause temporary spikes in blood pressure.` 
-        }
+        const textToAnalyze = payload.content || ""
+        if (!textToAnalyze) throw new Error("No content to analyze")
+        
         setOriginalInput(textToAnalyze)
-        // Check if payload specified custom routing and models.
+
         let sm = true; 
         let dm = DEFAULT_MODELS[0];
+        let ser = true;
         let modelsList = [dm];
         let extractor = ["openai/gpt-4o-mini"];
         
         if (saved) {
            const parsed = JSON.parse(saved)
            if (parsed.smartRouting !== undefined) sm = parsed.smartRouting
-           if (parsed.defaultModel && validIds.includes(parsed.defaultModel)) {
+           if (parsed.smartExtractorRouting !== undefined) {
+             ser = parsed.smartExtractorRouting
+             setSmartExtractorRouting(ser)
+           }
+           if (parsed.defaultModel) {
              dm = parsed.defaultModel
              modelsList = [dm]
            }
@@ -200,23 +227,28 @@ function AnalyzeContent() {
            }
         }
         
-        // Override with payload routing/models if provided
         if (payload.smartRouting !== undefined) {
           setSmartRouting(payload.smartRouting)
           sm = payload.smartRouting
         }
         if (payload.selectedModels && payload.selectedModels.length > 0) {
-          const scrubbedModels = payload.selectedModels.filter((m: string) => validIds.includes(m));
-          const finalModels = scrubbedModels.length > 0 ? scrubbedModels : [DEFAULT_MODELS[0]];
-          setSelectedModels(finalModels)
-          modelsList = finalModels
+          setSelectedModels(payload.selectedModels)
+          modelsList = payload.selectedModels
         }
 
         const initialModels = sm 
-          ? ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"] 
+          ? determineOptimalModels(textToAnalyze, !!payload.image, availableModels.length > 0 ? availableModels.map(m => typeof m === 'string' ? m : (m as any).id || "") : ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "deepseek/deepseek-coder"])
           : modelsList;
+
+        const initialExtractors = ser
+          ? determineOptimalExtractors(textToAnalyze, availableModels.length > 0 ? availableModels.map(m => typeof m === 'string' ? m : (m as any).id || "") : ["openai/gpt-4o-mini", "google/gemini-1.5-flash"])
+          : extractor;
           
-        runFullPipeline(textToAnalyze, initialModels, extractor)
+        if (payload.image) {
+          setUploadedImage(payload.image)
+        }
+
+        runFullPipeline(textToAnalyze, payload.image || null, initialModels, initialExtractors)
       } catch (e) {
         console.error("Failed to parse input payload", e)
       }
@@ -225,10 +257,10 @@ function AnalyzeContent() {
     }
   }, []) // eslint-disable-line
 
-  const runFullPipeline = async (text: string, modelsToUse: string[], extractorModels: string[]) => {
+  const runFullPipeline = async (text: string, image: string | null, modelsToUse: string[], extractorModels: string[]) => {
     setLoadingState("extracting")
     try {
-      const result = await extractClaims(text, modelsToUse)
+      const result = await extractClaims(text, image, modelsToUse)
       setRidiculousnessScore(result.ridiculousnessScore)
       setIsHumorous(result.isHumorous)
       
@@ -244,18 +276,23 @@ function AnalyzeContent() {
         
         setLoadingState("analyzing") // Switch state as we pass to models
         const results = await analyzeClaim(claim.text, snapshot, modelsToUse)
-        let totalConfidence = 0; let trueCount = 0; let falseCount = 0;
+        let totalConfidence = 0; let trueCount = 0; let falseCount = 0; let unvCount = 0;
         
         results.forEach(r => {
           totalConfidence += r.confidence;
           if (r.verdict.includes("True")) trueCount++;
-          if (r.verdict.includes("False")) falseCount++;
+          else if (r.verdict.includes("False")) falseCount++;
+          else if (r.verdict.includes("Unverifiable")) unvCount++;
         });
 
         const avgConf = Math.round(totalConfidence / results.length);
         const agreementBonus = (results.length > 1 && (trueCount === results.length || falseCount === results.length)) ? 10 : 0;
         const finalConf = Math.min(100, avgConf + agreementBonus);
-        const aggVerdict = trueCount > falseCount ? (falseCount === 0 ? "True" : "Mostly True") : falseCount > trueCount ? (trueCount === 0 ? "False" : "Mostly False") : "Mixed";
+        
+        let aggVerdict = "Mixed";
+        if (unvCount > trueCount && unvCount > falseCount) aggVerdict = "Unverifiable";
+        else if (trueCount > falseCount) aggVerdict = falseCount === 0 ? "True" : "Mostly True";
+        else if (falseCount > trueCount) aggVerdict = trueCount === 0 ? "False" : "Mostly False";
 
         detailedClaims.push({ 
           ...claim, 
@@ -376,6 +413,62 @@ function AnalyzeContent() {
     return { consensus, quality, consistency };
   }, [analyzedClaims, allSources]);
 
+  const handleChatSubmit = async () => {
+    if (!chatInput.trim() || isChatLoading) return;
+    
+    const userMsg = chatInput.trim();
+    setChatInput("");
+    setChatMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setIsChatOpen(true);
+    setIsChatLoading(true);
+
+    try {
+      const allSourcesText = analyzedClaims.flatMap(c => ((c as any).snapshot as any)?.sources || []).map((s: any) => `[${s.domain}] ${s.title}: ${s.snippet}`).join("\n");
+      const claimsText = analyzedClaims.map((c, i) => `Claim ${i+1}: ${c.text}\nVerdict: ${c.aggregatedVerdict}`).join("\n");
+
+      const systemPrompt = `You are Veridica's advanced fact-checking follow-up assistant. You must answer the user's questions strictly based on the analysis context provided below.
+      
+Original Input:
+${originalInput}
+
+Extracted Claims & Verdicts:
+${claimsText}
+
+Evidence & Sources:
+${allSourcesText}
+
+Always cite your sources using their domain names when explaining your answers. Be extremely helpful and objective.`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        ...chatMessages,
+        { role: "user", content: userMsg }
+      ];
+
+      const apiKeyHeader = localStorage.getItem("mesh_api_key") || "";
+
+      const response = await fetch("/api/mesh/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKeyHeader}` },
+        body: JSON.stringify({
+          model: chatModel,
+          messages,
+          temperature: 0.3
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch response");
+      const data = await response.json();
+      
+      const reply = data.choices[0]?.message?.content || "No response generated.";
+      setChatMessages(prev => [...prev, { role: "assistant", content: reply }]);
+    } catch (e) {
+      console.error(e);
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, I encountered an error answering your question. Please try again." }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
@@ -455,7 +548,7 @@ function AnalyzeContent() {
                   <div className="border-t mt-2 pt-2 text-right">
                     <Button size="sm" className="w-full" onClick={() => {
                        setDropdownOpen(false)
-                       if (originalInput) runFullPipeline(originalInput, selectedModels, sourceExtractorModels)
+                       if (originalInput) runFullPipeline(originalInput, uploadedImage, selectedModels, sourceExtractorModels)
                     }}>Apply & Run</Button>
                   </div>
                 </div>
@@ -477,7 +570,7 @@ function AnalyzeContent() {
               {loadingState === "analyzing" && "Consulting multiple models..."}
             </h2>
             <p className="text-muted-foreground text-lg">
-              {loadingState === "retrieving" && "Simulating Gemini & Grok Searches, removing duplicates, and generating Evidence Snapshot..."}
+              {loadingState === "retrieving" && "Executing Multiple AI searches, removing duplicates, and generating Evidence Snapshot..."}
               {loadingState === "analyzing" && (smartRouting ? `Using ${activeModels.map(m => getDisplayName(m)).join(", ")}` : `Using ${selectedModels.map(m => getDisplayName(m)).join(", ")}`)}
             </p>
           </div>
@@ -760,16 +853,25 @@ function AnalyzeContent() {
                         </div>
                       </div>
                       
-                      {/* Multimodal Preview placeholder */}
-                      <div className="border border-dashed border-border/30 rounded-2xl p-6 bg-muted/5 flex flex-col items-center justify-center gap-3 text-center">
-                        <Image className="w-8 h-8 text-muted-foreground/40" />
-                        <div>
-                          <h4 className="text-sm font-semibold text-foreground/80">Multimodal Image Context</h4>
-                          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                            Veridica supports analyzing claims extracted from diagrams, screenshots, or receipts. Uploaded documents will preview here.
-                          </p>
+                      {/* Multimodal Preview */}
+                      {uploadedImage ? (
+                        <div className="space-y-3">
+                          <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest px-1">Attached Image</h3>
+                          <div className="bg-card border border-border/30 shadow-sm p-2 rounded-2xl overflow-hidden flex justify-center bg-muted/20">
+                            <img src={uploadedImage} alt="Uploaded source" className="max-h-[400px] object-contain rounded-xl" />
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="border border-dashed border-border/30 rounded-2xl p-6 bg-muted/5 flex flex-col items-center justify-center gap-3 text-center">
+                          <Image className="w-8 h-8 text-muted-foreground/40" />
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground/80">Multimodal Image Context</h4>
+                            <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                              Veridica supports analyzing claims extracted from diagrams, screenshots, or receipts. Uploaded documents will preview here.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   
@@ -911,7 +1013,7 @@ function AnalyzeContent() {
                         </thead>
                         <tbody className="divide-y divide-border/20 text-sm font-medium">
                           {activeModels.map(model => {
-                            let trueCount = 0; let falseCount = 0; let totalConf = 0;
+                            let trueCount = 0; let falseCount = 0; let unvCount = 0; let totalConf = 0;
                             let explanations: string[] = [];
                             analyzedClaims.forEach(c => {
                               const res = c.modelResults.find(r => r.model === model);
@@ -919,10 +1021,16 @@ function AnalyzeContent() {
                                 totalConf += res.confidence;
                                 explanations.push(res.explanation);
                                 if (res.verdict.includes("True")) trueCount++;
-                                if (res.verdict.includes("False")) falseCount++;
+                                else if (res.verdict.includes("False")) falseCount++;
+                                else if (res.verdict.includes("Unverifiable")) unvCount++;
                               }
                             });
-                            const globalVerdict = trueCount > falseCount ? (falseCount === 0 ? "True" : "Mostly True") : falseCount > trueCount ? (trueCount === 0 ? "False" : "Mostly False") : "Mixed";
+                            
+                            let globalVerdict = "Mixed";
+                            if (unvCount > trueCount && unvCount > falseCount) globalVerdict = "Unverifiable";
+                            else if (trueCount > falseCount) globalVerdict = falseCount === 0 ? "True" : "Mostly True";
+                            else if (falseCount > trueCount) globalVerdict = trueCount === 0 ? "False" : "Mostly False";
+                            
                             const avgConfidence = analyzedClaims.length > 0 ? Math.round(totalConf / analyzedClaims.length) : 0;
                             const mStyle = getVerdictStyle(globalVerdict);
                             const isExpanded = expandedModels[model] || false;
@@ -940,7 +1048,7 @@ function AnalyzeContent() {
                                       onClick={() => setExpandedModels(prev => ({ ...prev, [model]: !isExpanded }))}
                                       className="text-xs font-bold text-[#60A5FA] hover:underline cursor-pointer"
                                     >
-                                      {isExpanded ? "Collapse explanation ↑" : "Read explanation →"}
+                                      {isExpanded ? "Collapse ▲" : "Expand ▼"}
                                     </button>
                                   </td>
                                 </tr>
@@ -975,10 +1083,58 @@ function AnalyzeContent() {
           </div>
 
           {/* Ask Follow-up Input anchored at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t">
-            <div className="max-w-4xl mx-auto flex gap-2">
-              <Input placeholder="Ask a follow-up question about these claims..." className="flex-1 bg-card" />
-              <Button size="icon" className="shrink-0 bg-primary hover:bg-primary/90"><Send className="w-4 h-4" /></Button>
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.1)] flex flex-col items-center">
+            
+            {/* Chat History Window */}
+            {isChatOpen && (
+              <div className="max-w-4xl w-full max-h-[50vh] overflow-y-auto mb-4 bg-card border border-border/50 rounded-xl p-4 flex flex-col gap-4 shadow-sm relative">
+                <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6 rounded-full" onClick={() => setIsChatOpen(false)}>
+                  <XCircle className="w-4 h-4 text-muted-foreground" />
+                </Button>
+                {chatMessages.length === 0 && <div className="text-center text-sm text-muted-foreground pt-4">Start a conversation...</div>}
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] p-3 rounded-lg text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted border border-border/30 text-foreground rounded-bl-sm"}`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {isChatLoading && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] p-4 rounded-lg text-sm bg-muted border border-border/30 text-foreground rounded-bl-sm flex gap-1.5 items-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-pulse"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-pulse" style={{ animationDelay: "150ms" }}></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-pulse" style={{ animationDelay: "300ms" }}></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="max-w-4xl w-full flex gap-2">
+              <select 
+                className="bg-card border border-input rounded-md px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground font-semibold cursor-pointer"
+                value={chatModel}
+                onChange={(e) => setChatModel(e.target.value)}
+              >
+                {activeModels.map(m => <option key={m} value={m}>{getDisplayName(m)}</option>)}
+              </select>
+              <Input 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleChatSubmit(); }}
+                disabled={isChatLoading}
+                placeholder="Ask a follow-up question about these claims..." 
+                className="flex-1 bg-card shadow-sm" 
+              />
+              <Button 
+                size="icon" 
+                onClick={handleChatSubmit} 
+                disabled={isChatLoading || !chatInput.trim()}
+                className="shrink-0 bg-primary hover:bg-primary/90 shadow-sm"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -995,13 +1151,19 @@ function AnalyzeContent() {
               </div>
               <div className="space-y-3">
                 {activeModels.map(model => {
-                  let trueCount = 0; let falseCount = 0;
+                  let trueCount = 0; let falseCount = 0; let unvCount = 0;
                   analyzedClaims.forEach(c => {
                     const res = c.modelResults.find(r => r.model === model);
                     if (res?.verdict.includes("True")) trueCount++;
-                    if (res?.verdict.includes("False")) falseCount++;
+                    else if (res?.verdict.includes("False")) falseCount++;
+                    else if (res?.verdict.includes("Unverifiable")) unvCount++;
                   })
-                  const globalVerdict = trueCount > falseCount ? (falseCount === 0 ? "True" : "Mostly True") : falseCount > trueCount ? (trueCount === 0 ? "False" : "Mostly False") : "Mixed";
+                  
+                  let globalVerdict = "Mixed";
+                  if (unvCount > trueCount && unvCount > falseCount) globalVerdict = "Unverifiable";
+                  else if (trueCount > falseCount) globalVerdict = falseCount === 0 ? "True" : "Mostly True";
+                  else if (falseCount > trueCount) globalVerdict = trueCount === 0 ? "False" : "Mostly False";
+                  
                   const mStyle = getVerdictStyle(globalVerdict);
                   
                   return (

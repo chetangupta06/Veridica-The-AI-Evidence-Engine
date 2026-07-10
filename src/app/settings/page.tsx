@@ -11,19 +11,34 @@ import { useTheme } from "next-themes"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
+import { ModelSelector } from "@/components/ModelSelector"
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   
-  const [smartRouting, setSmartRouting] = useState(true)
-  const [defaultModel, setDefaultModel] = useState("anthropic/claude-3-haiku")
-  const [sourceExtractorModels, setSourceExtractorModels] = useState<string[]>(["openai/gpt-4o-mini"])
   const [apiKey, setApiKey] = useState("")
-  const [customModels, setCustomModels] = useState<{ id: string; name: string }[]>([])
+  const [serperApiKey, setSerperApiKey] = useState("")
+  const [smartRouting, setSmartRouting] = useState(true)
+  const [smartExtractorRouting, setSmartExtractorRouting] = useState(true)
+  const [enableSourceExtractor, setEnableSourceExtractor] = useState(true)
+  const [reasoningDepth, setReasoningDepth] = useState("deep")
+  const [sourceExtractorModels, setSourceExtractorModels] = useState<string[]>(["openai/gpt-4o-mini"])
   const [apiUsage, setApiUsage] = useState({ requests: 0, tokens: 0, cost: 0 })
   
   const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite", "x-ai/grok-4.3"]
+  const DEFAULT_DISPLAY_NAMES: Record<string, string> = {
+    "anthropic/claude-3-haiku": "Claude 3 Haiku",
+    "openai/gpt-4o-mini": "GPT-4o Mini",
+    "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite",
+    "x-ai/grok-4.3": "Grok"
+  }
+  const DEPTH_LABELS: Record<string, string> = {
+    "fast": "Fast (Lower latency, surface level)",
+    "balanced": "Balanced",
+    "deep": "Deep (Multi-step verification)"
+  }
 
   // Avoid hydration mismatch
   useEffect(() => {
@@ -33,7 +48,9 @@ export default function SettingsPage() {
       try {
         const parsed = JSON.parse(saved)
         if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
-        if (parsed.defaultModel) setDefaultModel(parsed.defaultModel)
+        if (parsed.smartExtractorRouting !== undefined) setSmartExtractorRouting(parsed.smartExtractorRouting)
+        if (parsed.reasoningDepth) setReasoningDepth(parsed.reasoningDepth)
+        if (parsed.enableSourceExtractor !== undefined) setEnableSourceExtractor(parsed.enableSourceExtractor)
         if (parsed.sourceExtractorModels) {
           setSourceExtractorModels(parsed.sourceExtractorModels)
         } else if (parsed.sourceExtractorModel) {
@@ -47,10 +64,10 @@ export default function SettingsPage() {
     if (savedKey) {
       setApiKey(savedKey)
     }
-    
-    const savedCustom = localStorage.getItem("veridica_custom_models")
-    if (savedCustom) {
-      try { setCustomModels(JSON.parse(savedCustom)) } catch (e) {}
+
+    const savedSerperKey = localStorage.getItem("veridica_serper_api_key")
+    if (savedSerperKey) {
+      setSerperApiKey(savedSerperKey)
     }
     
     const savedUsage = localStorage.getItem("veridica_api_usage")
@@ -60,9 +77,26 @@ export default function SettingsPage() {
   }, [])
 
   const handleSave = () => {
-    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, defaultModel, sourceExtractorModels }))
-    localStorage.setItem("veridica_api_key", apiKey)
-    alert("Settings saved!")
+    localStorage.setItem("veridica_settings", JSON.stringify({
+      smartRouting,
+      smartExtractorRouting,
+      reasoningDepth,
+      enableSourceExtractor,
+      sourceExtractorModels
+    }))
+    if (apiKey) {
+      localStorage.setItem("veridica_api_key", apiKey)
+    } else {
+      localStorage.removeItem("veridica_api_key")
+    }
+
+    if (serperApiKey) {
+      localStorage.setItem("veridica_serper_api_key", serperApiKey)
+    } else {
+      localStorage.removeItem("veridica_serper_api_key")
+    }
+
+    toast.success("Settings saved successfully!")
   }
 
   if (!mounted) return null
@@ -112,6 +146,17 @@ export default function SettingsPage() {
               />
               <p className="text-xs text-muted-foreground">Your API key is stored securely in your browser's local storage and is never sent to our servers.</p>
             </div>
+            <div className="space-y-2 mt-4">
+              <label className="text-sm font-medium">Serper API Key (Optional)</label>
+              <Input 
+                type="password" 
+                placeholder="Required for Real Web Search (serper.dev)..." 
+                value={serperApiKey} 
+                onChange={(e) => setSerperApiKey(e.target.value)} 
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">Provide a Serper.dev API key to enable live Google Search results alongside Wikipedia.</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -127,29 +172,12 @@ export default function SettingsPage() {
           <CardContent className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Default Analysis Model</label>
-                <Select value={defaultModel} onValueChange={(val) => { if(val) setDefaultModel(val) }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="anthropic/claude-3-haiku">Claude 3 Haiku</SelectItem>
-                    <SelectItem value="openai/gpt-4o-mini">GPT-4o Mini</SelectItem>
-                    <SelectItem value="google/gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</SelectItem>
-                    <SelectItem value="x-ai/grok-4.3">Grok</SelectItem>
-                    {customModels.map(m => (
-                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">The primary model used when Smart Routing is disabled.</p>
-              </div>
-
-              <div className="space-y-2">
                 <label className="text-sm font-medium">Reasoning Depth</label>
-                <Select defaultValue="deep">
+                <Select value={reasoningDepth} onValueChange={(val) => { if(val) setReasoningDepth(val) }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select depth" />
+                    <SelectValue placeholder="Select depth">
+                      {DEPTH_LABELS[reasoningDepth] || reasoningDepth}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="fast">Fast (Lower latency, surface level)</SelectItem>
@@ -162,63 +190,46 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2 pt-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                Source Extractor AI
-              </label>
+              <div className="flex items-center justify-between md:w-1/2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  Source Extractor AI
+                </label>
+                <Switch checked={enableSourceExtractor} onCheckedChange={setEnableSourceExtractor} />
+              </div>
               
-              <Dialog>
-                <DialogTrigger className="w-full md:w-1/2 flex items-center justify-between border rounded-md px-3 py-2 text-sm text-muted-foreground bg-background hover:bg-muted/50 transition-colors cursor-pointer text-left h-10">
-                  <span className="truncate">
-                    {sourceExtractorModels.length} model{sourceExtractorModels.length !== 1 ? 's' : ''} selected
-                  </span>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </DialogTrigger>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>Select Source Extractors</DialogTitle>
-                    <DialogDescription>
-                      Choose one or more models to run in parallel as Research Agents.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-2.5 py-4 max-h-[320px] overflow-y-auto pr-2">
-                    {[...DEFAULT_MODELS, ...customModels.map(m => m.id)].map((m) => {
-                      const isChecked = sourceExtractorModels.includes(m);
-                      const isCustom = !DEFAULT_MODELS.includes(m);
-                      const displayName = isCustom ? customModels.find(c => c.id === m)?.name : m.split('/').pop();
-                      return (
-                        <button
-                          key={m}
-                          onClick={() => {
-                            if (isChecked) {
-                              if (sourceExtractorModels.length > 1) {
-                                setSourceExtractorModels(prev => prev.filter(x => x !== m));
-                              }
-                            } else {
-                              setSourceExtractorModels(prev => [...prev, m]);
-                            }
-                          }}
-                          className={`w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
-                            isChecked ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 hover:bg-muted/40"
-                          }`}
-                        >
-                          <div>
-                            <div className="font-semibold text-sm flex items-center gap-2">
-                              {displayName}
-                              {isCustom && <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Custom</span>}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate max-w-[200px] mt-0.5">{m}</div>
-                          </div>
-                          <div className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${
-                            isChecked ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
-                          }`}>
-                            {isChecked && <Check className="w-3.5 h-3.5" />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Smart Extractor Routing</label>
+                  <p className="text-xs text-muted-foreground">Automatically pick the best models for extracting sources.</p>
+                </div>
+                <Switch 
+                  checked={smartExtractorRouting} 
+                  onCheckedChange={setSmartExtractorRouting} 
+                  disabled={!enableSourceExtractor}
+                />
+              </div>
+
+              <div className="pt-2">
+                {!smartExtractorRouting && (
+                  <ModelSelector 
+                    selectedModels={sourceExtractorModels}
+                    onSelectedModelsChange={(models) => {
+                      const toSet = models.length > 0 ? models : ["openai/gpt-4o-mini"];
+                      setSourceExtractorModels(toSet);
+                    }}
+                    triggerDisabled={!enableSourceExtractor}
+                    triggerClassName="w-full md:w-1/2 flex items-center justify-between border rounded-md px-3 py-2 text-sm text-muted-foreground bg-background hover:bg-muted/50 transition-colors cursor-pointer text-left h-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    triggerContent={
+                      <>
+                        <span className="truncate">
+                          {!enableSourceExtractor ? "no source extracted" : `${sourceExtractorModels.length} model${sourceExtractorModels.length !== 1 ? 's' : ''} selected`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </>
+                    }
+                  />
+                )}
+              </div>
 
               <p className="text-xs text-muted-foreground">The AI models used by the Research Agents to fetch and deduplicate initial sources. Selecting multiple runs them in parallel.</p>
             </div>
