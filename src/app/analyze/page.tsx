@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, ChevronUp, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Brain, Check, FileText, Database, Activity, Award, Image } from "lucide-react"
+import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Network, Loader2, Download, Plus, Send, ChevronDown, ChevronUp, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Brain, Check, FileText, Database, Activity, Award, Image, Search } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { AboutModal } from "@/components/AboutModal"
@@ -647,12 +647,12 @@ Always cite your sources using their domain names when explaining your answers. 
               </div>
 
               {/* Hero Verdict */}
-              <div className="border border-border/50 rounded-2xl p-6 bg-card shadow-sm space-y-4">
+              <div className="border border-border/50 rounded-2xl p-4 md:p-6 bg-card shadow-sm space-y-4">
                 <div className="flex items-center gap-3">
                   <span className={overallVerdictText === "TRUE" ? "text-emerald-500" : overallVerdictText === "FALSE" ? "text-red-500" : "text-amber-500"}>
-                    {overallVerdictText === "TRUE" ? <CheckCircle2 className="w-12 h-12" /> : overallVerdictText === "FALSE" ? <XCircle className="w-12 h-12" /> : <AlertTriangle className="w-12 h-12" />}
+                    {overallVerdictText === "TRUE" ? <CheckCircle2 className="w-10 h-10 md:w-12 md:h-12" /> : overallVerdictText === "FALSE" ? <XCircle className="w-10 h-10 md:w-12 md:h-12" /> : <AlertTriangle className="w-10 h-10 md:w-12 md:h-12" />}
                   </span>
-                  <h1 className={`text-5xl font-extrabold tracking-tight ${
+                  <h1 className={`text-4xl md:text-5xl font-extrabold tracking-tight ${
                     overallVerdictText === "TRUE" ? "text-emerald-500" : overallVerdictText === "FALSE" ? "text-red-500" : "text-amber-500"
                   }`}>
                     {overallVerdictText}
@@ -1083,6 +1083,46 @@ Always cite your sources using their domain names when explaining your answers. 
               </div>
 
             </div>
+
+            {/* Mobile-only Sources Section */}
+            {allSources.length > 0 && (
+              <div className="md:hidden mt-8 space-y-4 w-full max-w-4xl mx-auto px-4">
+                <h3 className="text-xl font-bold font-serif tracking-tight flex items-center gap-2">
+                  <Search className="w-5 h-5 text-primary" />
+                  Cited Sources
+                </h3>
+                <div className="space-y-3">
+                  {allSources.map((source: any, idx: number) => (
+                    <a 
+                      key={idx} 
+                      href={source.url} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="block p-3 rounded-xl border border-border/50 bg-card shadow-sm hover:bg-muted/20 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <img 
+                          src={`https://www.google.com/s2/favicons?domain=${source.domain}&sz=64`} 
+                          alt="" 
+                          className="w-4 h-4 rounded-sm"
+                          onError={(e) => { e.currentTarget.style.display = 'none' }}
+                        />
+                        <span className="text-xs font-semibold text-primary truncate">
+                          {source.domain}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug mb-1.5">
+                        {source.title}
+                      </h4>
+                      <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                        "{source.snippet}"
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Spacer block to guarantee scroll clearance for absolute chat input */}
             <div className="h-32 w-full shrink-0"></div>
           </div>

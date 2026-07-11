@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles, ChevronDown, Check, Plus, X, Trash2, History, PanelLeftClose, PanelLeftOpen, Loader2 } from "lucide-react"
+import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles, ChevronDown, Check, Plus, X, Trash2, History, PanelLeftClose, PanelLeftOpen, Loader2, Settings } from "lucide-react"
 import Link from "next/link"
 import { AboutModal } from "@/components/AboutModal"
 import { useRouter } from "next/navigation"
@@ -226,8 +226,11 @@ export default function Home() {
             </Link>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
-            <Button variant="ghost" onClick={() => router.push("/settings")} className="text-sm text-muted-foreground hover:text-foreground transition-colors md:mr-2">
+            <Button variant="ghost" onClick={() => router.push("/settings")} className="hidden md:flex text-sm text-muted-foreground hover:text-foreground transition-colors md:mr-2">
               Configure API & Models
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => router.push("/settings")} className="md:hidden text-muted-foreground hover:text-foreground transition-colors">
+              <Settings className="w-5 h-5" />
             </Button>
             <ThemeToggle />
             <AboutModal />

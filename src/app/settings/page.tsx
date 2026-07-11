@@ -117,7 +117,7 @@ export default function SettingsPage() {
             <ThemeToggle />
             <Button onClick={handleSave} className="gap-2 bg-primary hover:bg-primary/90 transition-transform active:scale-95">
               <Save className="w-4 h-4" />
-              Save Changes
+              <span className="hidden sm:inline">Save</span>
             </Button>
           </div>
         </div>
