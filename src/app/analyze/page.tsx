@@ -108,7 +108,7 @@ const HeatmapText = ({ text, claims }: { text: string, claims: ClaimAnalysis[] }
 
 function AnalyzeContent() {
   const router = useRouter()
-  const [apiKey] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const { models: availableModels } = useMeshModels(apiKey);
   const [smartRouting, setSmartRouting] = useState(true)
   const [smartExtractorRouting, setSmartExtractorRouting] = useState(true)
@@ -170,6 +170,11 @@ function AnalyzeContent() {
   }, [activeModels, chatModel]);
 
   useEffect(() => {
+    const savedKey = localStorage.getItem("veridica_api_key")
+    if (savedKey) {
+      setApiKey(savedKey)
+    }
+
     // Load custom models from localStorage
     let loadedCustomModels: { id: string; name: string }[] = [];
     const savedModels = localStorage.getItem("veridica_custom_models")
