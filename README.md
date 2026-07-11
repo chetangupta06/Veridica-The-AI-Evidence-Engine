@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
+  <img src="public/logo.png" alt="Veridica Logo" width="120"/>
+  <h1>Veridica</h1>
+  <p><strong>The AI Evidence Engine</strong></p>
+  <p>Paste any claim. Get evidence, not opinions.</p>
+</div>
 
-## Getting Started
+---
 
-First, run the development server:
+## 🧐 What is Veridica?
+Veridica is an open-source, AI-powered fact-checking engine designed to evaluate claims by analyzing real-time web evidence through a consensus of multiple state-of-the-art Large Language Models (LLMs). 
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Instead of trusting a single AI hallucination, Veridica builds trust by sourcing raw data from Google and Wikipedia and demanding that multiple top-tier models (like GPT-4o, Claude 3.5, and DeepSeek) independently agree on the verdict.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ✨ Key Features
+- **🕵️ Real-time Web Search**: Actively scrapes Google Search and Wikipedia to retrieve the latest articles, papers, and news related to a claim.
+- **🧠 Multi-Model Consensus**: Queries up to 3 distinct LLMs simultaneously, measuring their agreement to generate an aggregated "Trust Score".
+- **⚡ Smart Routing**: Our intelligent routing algorithm automatically directs simple claims to fast models and complex, nuanced claims to heavy reasoning models.
+- **📱 Fully Responsive Design**: A beautiful, modern interface engineered to be flawless on both desktop and mobile devices, complete with Dark Mode support.
+- **💬 Interactive Follow-up Chat**: Ask follow-up questions directly to the AI about the evidence it found.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Tech Stack
+- **Framework**: [Next.js 14+ (App Router)](https://nextjs.org/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **AI Integration**: [Mesh API](https://mesh.dev/) for cross-model inference
+- **Search**: [Serper.dev](https://serper.dev/) (Google Search API fallback)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🚀 Getting Started
 
-## Learn More
+### Prerequisites
+1. **Node.js** (v18 or newer)
+2. **Mesh API Key** - Get yours to access all the leading AI models through one single endpoint.
 
-To learn more about Next.js, take a look at the following resources:
+### Installation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/chetangupta06/Veridica-The-AI-Evidence-Engine.git
+   cd Veridica-The-AI-Evidence-Engine
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-## Deploy on Vercel
+3. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. **Configure your API keys:**
+   Open `http://localhost:3000` in your browser. Navigate to the **Settings** page (⚙️ icon) to securely save your Mesh API Key (and optionally your Serper API Key) into your browser's local storage.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📜 How It Works
+1. **Input**: A user inputs a claim (e.g., *"Coffee stunts your growth"*).
+2. **Extraction**: The system searches Google and Wikipedia and uses a fast extraction model to pull verbatim, factual snippets from the retrieved articles.
+3. **Consensus Analysis**: The extracted snippets are bundled and sent concurrently to the user's selected LLMs.
+4. **Verdict Generation**: The models return independent verdicts. Veridica calculates an aggregated Trust Score and clearly highlights the AI consensus and cited sources.
+
+## 🤝 Contributing
+Contributions are always welcome! Feel free to open an issue or submit a pull request if you have ideas for new features, better routing logic, or UI improvements.
