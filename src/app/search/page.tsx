@@ -317,7 +317,7 @@ export default function Home() {
           
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 hidden sm:flex mr-2">
+              <div className="flex items-center gap-1.5 mr-1.5 sm:mr-2">
                 <Switch 
                   id="smart-routing-inline" 
                   checked={smartRouting} 

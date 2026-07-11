@@ -528,15 +528,15 @@ Always cite your sources using their domain names when explaining your answers. 
   return (
     <div id="report-container" className="flex flex-col h-screen overflow-hidden bg-background">
       {/* Top Navigation & Model Selector */}
-      <header className="flex items-center justify-between border-b px-6 py-4 bg-card z-10 shrink-0">
+      <header className="flex items-center justify-between border-b px-3 py-3 md:px-6 md:py-4 bg-card z-10 shrink-0">
         <div className="flex items-center gap-4">
           <Link href="/search">
             <Button variant="ghost" size="icon" className="rounded-full">
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <div className="font-semibold text-lg flex items-center gap-2">
-            <Network className="h-5 w-5 text-primary" />
+          <div className="font-semibold text-sm sm:text-lg flex items-center gap-1.5 whitespace-nowrap">
+            <Network className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Analysis Engine
           </div>
         </div>
@@ -546,12 +546,14 @@ Always cite your sources using their domain names when explaining your answers. 
             <ThemeToggle />
           </div>
 
-          <div className="flex items-center gap-3 border-l pl-4">
-            <Button variant="outline" size="sm" onClick={() => { sessionStorage.removeItem("veridica_input"); router.push("/search") }}>
-              <Plus className="w-4 h-4 mr-2" /> New Analysis
+          <div className="flex items-center gap-2 sm:gap-3 border-l pl-2 sm:pl-4">
+            <Button variant="outline" size="sm" className="px-2.5 sm:px-3" onClick={() => { sessionStorage.removeItem("veridica_input"); router.push("/search") }} title="New Analysis">
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">New Analysis</span>
             </Button>
-            <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleExport}>
-              <Download className="w-4 h-4 mr-2" /> Export Report
+            <Button size="sm" className="bg-primary hover:bg-primary/90 px-2.5 sm:px-3" onClick={handleExport} title="Export Report">
+              <Download className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Export Report</span>
             </Button>
           </div>
 
