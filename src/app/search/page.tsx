@@ -244,7 +244,7 @@ export default function Home() {
 
       {/* Hero Section */}
       <div className="w-full max-w-4xl text-center mb-12 mt-12">
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center -mb-2 md:-mb-4">
           <div className="relative w-24 h-24 md:w-32 md:h-32">
             <div className="w-full h-full flex items-center justify-center p-2">
               <img src="/logo.png" alt="Veridica Logo" className="w-full h-full object-contain drop-shadow-2xl scale-110" onError={(e) => { e.currentTarget.style.display = 'none'; }} />

@@ -91,15 +91,39 @@ async function performSearchWithLLM(claim: string, searchContext: string, model:
   if (!content) return [];
 
   try {
-    const match = content.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    const cleanContent = match ? match[0] : content.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleanContent);
+    let parsed: any;
+    let cleanContent = content.trim();
+    
+    // Attempt 1: Direct parse
+    try {
+      parsed = JSON.parse(cleanContent);
+    } catch {
+      // Attempt 2: Strip markdown
+      cleanContent = cleanContent.replace(/```(?:json)?\n?/gi, "").replace(/```/g, "").trim();
+      try {
+        parsed = JSON.parse(cleanContent);
+      } catch {
+        // Attempt 3: Extract from first [ to last ]
+        const firstBracket = cleanContent.indexOf('[');
+        const lastBracket = cleanContent.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          parsed = JSON.parse(cleanContent.substring(firstBracket, lastBracket + 1));
+        } else {
+          throw new Error("Could not extract JSON array bounds");
+        }
+      }
+    }
+
+    if (!Array.isArray(parsed)) {
+       parsed = [parsed]; // fallback if it returned a single object
+    }
+
     return parsed.map((src: any) => ({
       ...src,
       retrievedBy: agentName
     }));
   } catch (e) {
-    console.error("Failed to parse search results from LLM", e);
+    console.error(`Failed to parse search results from LLM (${agentName}):`, e);
     return [];
   }
 }

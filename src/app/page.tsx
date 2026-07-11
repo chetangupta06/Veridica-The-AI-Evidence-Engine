@@ -84,7 +84,7 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-xl font-bold mb-3">Multi-Model Consensus</h3>
                 <p className="text-muted-foreground">
-                  We don't trust just one AI. Veridica runs your claim simultaneously through DeepSeek, Claude, GPT, and Gemini to find the ultimate consensus.
+                  We don't trust just one AI. Veridica runs your claim simultaneously through 1,000+ models to find the ultimate consensus.
                 </p>
               </div>
 
@@ -172,9 +172,9 @@ export default function LandingPage() {
             <Accordion className="w-full bg-card rounded-2xl border px-6 py-2 shadow-sm">
               <AccordionItem value="item-1">
                 <AccordionTrigger className="text-lg font-medium hover:no-underline hover:text-primary transition-colors">What is Veridica?</AccordionTrigger>
-                <AccordionContent className="text-muted-foreground text-base leading-relaxed">
-                  Veridica is an AI-powered evidence engine that fact-checks claims using a consensus of top-tier AI models (like GPT-4, Claude 3.5, and DeepSeek) backed by real-time web search retrieval.
-                </AccordionContent>
+                <AccordionContent className="text-muted-foreground text-base">
+                Veridica is an AI-powered evidence engine that fact-checks claims using a consensus of 1,000+ models backed by real-time web search retrieval.
+              </AccordionContent>
               </AccordionItem>
               <AccordionItem value="item-2">
                 <AccordionTrigger className="text-lg font-medium hover:no-underline hover:text-primary transition-colors">How does the multi-model consensus work?</AccordionTrigger>

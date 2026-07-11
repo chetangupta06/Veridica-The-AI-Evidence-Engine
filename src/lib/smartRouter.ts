@@ -83,8 +83,19 @@ export function determineOptimalModels(
     selectedSet = availableModels;
   }
 
+  // Enforce minimum 2 models if available by pulling from our other recommended tiers
+  if (selectedSet.length < 2) {
+    const fallbackOptions = [...getAvailable(fastModels), ...getAvailable(heavyModels), ...getAvailable(visionModels)];
+    for (const m of fallbackOptions) {
+      if (!selectedSet.includes(m)) {
+        selectedSet.push(m);
+      }
+      if (selectedSet.length >= 2) break;
+    }
+  }
+
   // Get raw IDs for the final selection
-  const rawSelection = selectedSet.slice(0, 3).map(m => {
+  const rawSelection = selectedSet.map(m => {
     const match = availableModels.find(avail => {
       const availId = typeof avail === 'string' ? avail : (avail as any).id || "";
       return availId.toLowerCase() === m || availId.toLowerCase().endsWith(m.split('/')[1]);
@@ -92,7 +103,20 @@ export function determineOptimalModels(
     return typeof match === 'string' ? match : (match as any)?.id || m;
   });
 
-  return Array.from(new Set(rawSelection)).slice(0, 3);
+  let finalSelection = Array.from(new Set(rawSelection));
+  
+  // Absolute fallback: if still < 2, just grab anything available
+  if (finalSelection.length < 2 && availableModels.length >= 2) {
+    for (const model of availableModels) {
+      const modelId = typeof model === 'string' ? model : (model as any).id || "";
+      if (modelId && !finalSelection.includes(modelId)) {
+        finalSelection.push(modelId);
+        if (finalSelection.length >= 2) break;
+      }
+    }
+  }
+
+  return finalSelection.slice(0, 3);
 }
 
 export function determineOptimalExtractors(
