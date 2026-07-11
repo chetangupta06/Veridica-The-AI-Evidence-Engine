@@ -106,7 +106,7 @@ export default function SettingsPage() {
       <header className="border-b bg-card sticky top-0 z-10 animate-in fade-in slide-in-from-top-2 duration-500">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/">
+            <Link href="/search">
               <Button variant="ghost" size="icon" className="rounded-full">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -170,25 +170,6 @@ export default function SettingsPage() {
             <CardDescription>Configure which AI models to use for evidence extraction and analysis.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Reasoning Depth</label>
-                <Select value={reasoningDepth} onValueChange={(val) => { if(val) setReasoningDepth(val) }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select depth">
-                      {DEPTH_LABELS[reasoningDepth] || reasoningDepth}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fast">Fast (Lower latency, surface level)</SelectItem>
-                    <SelectItem value="balanced">Balanced</SelectItem>
-                    <SelectItem value="deep">Deep (Multi-step verification)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Deep reasoning takes longer but provides better accuracy.</p>
-              </div>
-            </div>
-
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between md:w-1/2">
                 <label className="text-sm font-medium flex items-center gap-2">
@@ -240,40 +221,6 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">Automatically pick the best model for each specific claim.</p>
               </div>
               <Switch checked={smartRouting} onCheckedChange={setSmartRouting} />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Analysis Preferences */}
-        <Card className="border-primary/10 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings2 className="h-5 w-5 text-primary" />
-              Analysis Preferences
-            </CardTitle>
-            <CardDescription>Adjust how evidence is presented and scored.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">Strict Fact-Checking</h4>
-                <p className="text-sm text-muted-foreground">Require multiple highly-credible sources to verify a claim.</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">Show Political Bias Warning</h4>
-                <p className="text-sm text-muted-foreground">Flag claims that heavily rely on partisan sources.</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">Auto-Extract URLs</h4>
-                <p className="text-sm text-muted-foreground">Automatically fetch and read linked content within text.</p>
-              </div>
-              <Switch defaultChecked />
             </div>
           </CardContent>
         </Card>

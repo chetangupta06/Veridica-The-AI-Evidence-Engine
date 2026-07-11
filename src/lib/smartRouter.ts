@@ -13,10 +13,10 @@ export function determineOptimalModels(
   const visionModels = [
     "openai/gpt-4o",
     "anthropic/claude-3.5-sonnet",
-    "google/gemini-1.5-pro",
+    "google/gemini-2.5-pro",
+    "google/gemini-2.5-flash-image",
     "x-ai/grok-2-vision-1212",
-    "openai/gpt-4o-mini",
-    "google/gemini-1.5-flash"
+    "openai/gpt-4o-mini"
   ];
 
   // 2. Domain-based routing (Coding/Tech)
@@ -43,14 +43,15 @@ export function determineOptimalModels(
     "openai/gpt-4o",
     "deepseek/deepseek-chat",
     "x-ai/grok-2-1212",
-    "google/gemini-1.5-pro"
+    "google/gemini-2.5-pro"
   ];
 
   const fastModels = [
     "openai/gpt-4o-mini",
+    "google/gemini-2.5-flash",
+    "google/gemini-3.1-flash-lite",
     "anthropic/claude-3-haiku",
     "anthropic/claude-3-5-haiku-20241022",
-    "google/gemini-1.5-flash",
     "meta-llama/llama-3.1-8b-instruct"
   ];
 
@@ -106,17 +107,18 @@ export function determineOptimalExtractors(
   
   // High context, heavy text processing extractors
   const heavyExtractors = [
-    "google/gemini-1.5-pro",
+    "google/gemini-2.5-pro",
     "anthropic/claude-3.5-sonnet",
     "openai/gpt-4o"
   ];
 
   // Blazing fast extractors
   const fastExtractors = [
-    "google/gemini-1.5-flash",
     "anthropic/claude-3-haiku",
     "anthropic/claude-3-5-haiku-20241022",
     "openai/gpt-4o-mini",
+    "google/gemini-2.5-flash",
+    "google/gemini-3.1-flash-lite",
     "meta-llama/llama-3.1-8b-instruct"
   ];
 

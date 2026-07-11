@@ -1,429 +1,272 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { ShieldCheck, Link as LinkIcon, FileText, Mic, ArrowRight, Sparkles, ChevronDown, Check, Plus, X, Trash2, History, PanelLeftClose, PanelLeftOpen, Loader2 } from "lucide-react"
+import { ShieldCheck, Search, Zap, Layers, BarChart, CheckCircle2, FileSearch, ArrowRight, BrainCircuit, Globe, MessageSquareWarning, Github } from "lucide-react"
 import Link from "next/link"
-import { AboutModal } from "@/components/AboutModal"
-import { useRouter } from "next/navigation"
-import { useState, useEffect, useRef } from "react"
-import { toast } from "sonner"
 import { ThemeToggle } from "@/components/ThemeToggle"
-import { Switch } from "@/components/ui/switch"
-import { ModelSelector } from "@/components/ModelSelector"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { useMeshModels } from "@/lib/useMeshModels"
-import { determineOptimalModels } from "@/lib/smartRouter"
+import Image from "next/image"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 
-type HistoryItem = {
-  id: string;
-  type: "text" | "url" | "file";
-  content: string;
-  date: number;
-}
-
-export default function Home() {
-  const router = useRouter()
-  const [claimText, setClaimText] = useState("")
-  const [isRecording, setIsRecording] = useState(false)
-  const recognitionRef = useRef<any>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [urlInput, setUrlInput] = useState("")
-  const [fileParsing, setFileParsing] = useState(false)
-  
-  const [history, setHistory] = useState<HistoryItem[]>([])
-  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
-  
-  const DEFAULT_MODELS = ["anthropic/claude-3-haiku", "openai/gpt-4o-mini", "google/gemini-3.1-flash-lite"]
-  const DEFAULT_DISPLAY_NAMES: Record<string, string> = {
-    "anthropic/claude-3-haiku": "Claude 3 Haiku",
-    "openai/gpt-4o-mini": "GPT-4o Mini",
-    "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite"
-  }
-  
-  const getDisplayName = (modelId: string) => {
-    if (DEFAULT_DISPLAY_NAMES[modelId]) return DEFAULT_DISPLAY_NAMES[modelId];
-    return modelId.split('/').pop() || modelId;
-  }
-  
-  const [smartRouting, setSmartRouting] = useState(true)
-  const [selectedModels, setSelectedModels] = useState<string[]>([DEFAULT_MODELS[0]])
-
-  const [apiKey, setApiKey] = useState("")
-  useEffect(() => {
-    const savedApiKey = localStorage.getItem("veridica_api_key")
-    if (savedApiKey) setApiKey(savedApiKey)
-  }, [])
-
-  const { models: availableModels } = useMeshModels(apiKey)
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recog = new SpeechRecognition();
-        recog.continuous = false;
-        recog.interimResults = false;
-        recognitionRef.current = recog;
-      }
-    }
-
-    const savedSettings = localStorage.getItem("veridica_settings")
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings)
-        if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
-        if (parsed.selectedModels && Array.isArray(parsed.selectedModels)) {
-          setSelectedModels(parsed.selectedModels)
-        }
-      } catch (e) {}
-    }
-
-    const savedHistory = localStorage.getItem("veridica_history")
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory))
-      } catch (e) {}
-    }
-  }, []);
-
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      toast.error("Speech recognition not supported in this browser.");
-      return;
-    }
-    
-    if (isRecording) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    } else {
-      const recog = recognitionRef.current;
-      const initialText = claimText ? claimText + " " : "";
-      
-      recog.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        setClaimText(initialText + transcript);
-      };
-
-      recog.onerror = (event: any) => {
-        setIsRecording(false);
-        if (event.error !== 'no-speech') {
-          let errorMsg = event.error;
-          if (event.error === 'network') {
-            errorMsg = "Network error. This often happens in browsers (like Brave) that block speech recognition, or when offline.";
-          } else if (event.error === 'not-allowed') {
-            errorMsg = "Microphone access denied. Please allow microphone permissions in your browser.";
-          }
-          toast.error("Microphone error", { description: errorMsg });
-        }
-      };
-      
-      recog.onend = () => {
-        setIsRecording(false);
-      };
-
-      recog.start();
-      setIsRecording(true);
-    }
-  }
-
-  useEffect(() => {
-    const saved = localStorage.getItem("veridica_settings")
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (parsed.smartRouting !== undefined) setSmartRouting(parsed.smartRouting)
-        if (parsed.selectedModels && Array.isArray(parsed.selectedModels)) {
-          setSelectedModels(parsed.selectedModels)
-        }
-      } catch (e) {}
-    }
-
-    const savedHistory = localStorage.getItem("veridica_history")
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory))
-      } catch (e) {}
-    }
-  }, [])
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      toast.error("Only images are supported")
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      if (typeof event.target?.result === 'string') {
-        setUploadedImage(event.target.result)
-      }
-    }
-    reader.readAsDataURL(file)
-  }
-  
-  const handleAnalyze = (type: "text" | "url" | "file", content: string, skipHistory = false) => {
-    if (!content.trim() && !uploadedImage) return;
-
-    if (!skipHistory) {
-      const newItem: HistoryItem = {
-        id: Date.now().toString(),
-        type,
-        content,
-        date: Date.now()
-      }
-      const updatedHistory = [newItem, ...history].slice(0, 50)
-      setHistory(updatedHistory)
-      localStorage.setItem("veridica_history", JSON.stringify(updatedHistory))
-    }
-
-    let finalModels = selectedModels;
-    if (smartRouting) {
-      const hasImage = !!uploadedImage || type === "file";
-      const availableModelsList = availableModels.map(m => typeof m === 'string' ? m : (m as any).id || "");
-      finalModels = determineOptimalModels(content, hasImage, availableModelsList);
-    }
-
-    sessionStorage.setItem("veridica_input", JSON.stringify({ 
-      type: uploadedImage ? "file" : type, 
-      content,
-      image: uploadedImage,
-      smartRouting,
-      selectedModels: finalModels
-    }))
-    
-    toast.success("Claim loaded. Route established to Mesh API.");
-    router.push("/analyze")
-  }
-
-  const loadDemo = () => {
-    const demoClaim = "India’s Chandrayaan-3 mission cost approximately $75 million, which is significantly cheaper than the budget of the Hollywood movie Interstellar. However, critics claim it generated massive amounts of space debris in lunar orbit.";
-    setClaimText(demoClaim);
-    toast.info("Demo claim loaded.");
-  }
-
+export default function LandingPage() {
   return (
-    <div className="flex min-h-screen bg-background w-full">
-
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col bg-background relative">
-        {/* Top Navbar */}
-        <div className="w-full p-4 border-b flex justify-between items-center gap-2 md:gap-4 shrink-0 h-[73px] sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center">
-            <span className="text-xl font-bold font-serif tracking-tight ml-2 md:ml-4 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
-              Veridica
-            </span>
+    <div className="flex flex-col min-h-screen bg-background">
+      
+      {/* Header */}
+      <header className="px-6 py-4 flex items-center justify-between sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b">
+        <div className="flex items-center gap-2">
+          <div className="relative w-10 h-10 flex items-center justify-center">
+             <img src="/logo.png" alt="Veridica Logo" className="object-contain w-full h-full drop-shadow-sm scale-125" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           </div>
-          <div className="flex items-center gap-2 md:gap-4">
-            <Button variant="ghost" onClick={() => router.push("/settings")} className="text-sm text-muted-foreground hover:text-foreground transition-colors md:mr-2">
-              Configure API & Models
+          <span className="font-bold text-xl tracking-tight">Veridica</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <Link href="https://github.com/chetangupta06/Veridica-The-AI-Evidence-Engine" target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="icon" className="rounded-full">
+              <Github className="w-5 h-5" />
+              <span className="sr-only">GitHub Repository</span>
             </Button>
-            <ThemeToggle />
-            <AboutModal />
-            <Link href="https://github.com/chetangupta06/Veridica-The-AI-Evidence-Engine" target="_blank" rel="noreferrer">
-              <Button variant="ghost" size="icon">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-muted-foreground hover:text-foreground"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          </Link>
+          <ThemeToggle />
+          <Link href="/search">
+            <Button size="sm" className="font-medium bg-primary text-primary-foreground hover:bg-primary/90">
+              Analyze Claim <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center">
+        
+        {/* Hero Section */}
+        <section className="w-full max-w-5xl mx-auto px-6 py-20 md:py-32 flex flex-col items-center text-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+            <SparklesIcon className="w-4 h-4" /> The AI Evidence Engine
+          </div>
+          
+          <div className="relative w-32 h-32 md:w-48 md:h-48 mb-4">
+            <div className="w-full h-full flex items-center justify-center p-2">
+              <img src="/logo.png" alt="Veridica Logo" className="w-full h-full object-contain drop-shadow-2xl scale-110" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            </div>
+            <div className="absolute inset-0 -z-10 bg-primary/20 blur-3xl rounded-full"></div>
+          </div>
+
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight max-w-4xl bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/60">
+            Verify. Analyze. Trust.
+          </h1>
+          
+          <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed">
+            Stop relying on SEO noise and AI hallucinations. Veridica extracts claims and verifies them against a consensus of top AI reasoning engines and real-world web evidence.
+          </p>
+
+          <div className="pt-8 pb-12 flex flex-col sm:flex-row gap-4 items-center">
+            <Link href="/search">
+              <Button size="lg" className="h-14 px-8 text-lg font-semibold rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all hover:-translate-y-1">
+                Start Analyzing Claims <Search className="ml-2 w-5 h-5" />
               </Button>
             </Link>
           </div>
-        </div>
+        </section>
 
-        {/* Centered Content */}
-        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-12 w-full">
-
-      {/* Hero Section */}
-      <div className="w-full max-w-4xl text-center mb-12 mt-12">
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-full">
-            <ShieldCheck className="h-10 w-10 text-primary" />
-          </div>
-        </div>
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
-          Veridica
-        </h1>
-        <p className="text-xl md:text-2xl text-muted-foreground font-medium">
-          Paste any claim. Get evidence, not opinions.
-        </p>
-      </div>
-
-      {/* Input Area */}
-      <div className="w-full max-w-3xl bg-card rounded-xl border shadow-lg flex flex-col p-2 md:p-4">
-        <div className="relative w-full">
-          <Textarea
-            placeholder="E.g., 'Coffee stunts your growth' or 'Electric cars produce more emissions over their lifetime than gas cars...'"
-            className="flex-1 min-h-[120px] text-lg resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent p-4 pr-12 pb-12 w-full"
-            value={claimText}
-            onChange={(e) => setClaimText(e.target.value)}
-          />
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleRecording}
-            className={`absolute top-2 right-2 rounded-full h-9 w-9 transition-colors ${isRecording ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
-            title="Voice Input"
-          >
-            <Mic className={`h-5 w-5 ${isRecording ? 'animate-pulse' : ''}`} />
-          </Button>
-        </div>
-        <div className="flex items-center justify-between border-t border-border/50 p-3 mt-2">
-          <div className="flex items-center gap-2">
-            <input 
-              type="file" 
-              accept="image/*"
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-full"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            {uploadedImage && (
-              <div className="relative w-8 h-8 rounded overflow-hidden border">
-                <img src={uploadedImage} alt="Uploaded" className="w-full h-full object-cover" />
-                <button 
-                  onClick={() => setUploadedImage(null)}
-                  className="absolute -top-1 -right-1 bg-background rounded-full border shadow-sm w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-            <div className="text-xs text-muted-foreground font-medium hidden sm:block ml-2">
-              {claimText.length} characters
+        {/* Why Veridica Section */}
+        <section className="w-full bg-muted/30 border-y py-24">
+          <div className="max-w-6xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Veridica?</h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                Built for researchers, journalists, and truth-seekers who demand rigorous, unbiased evidence.
+              </p>
             </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="bg-card p-8 rounded-2xl border shadow-sm flex flex-col items-center text-center hover:shadow-md transition-shadow">
+                <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-6 text-primary">
+                  <BrainCircuit className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">Multi-Model Consensus</h3>
+                <p className="text-muted-foreground">
+                  We don't trust just one AI. Veridica runs your claim simultaneously through DeepSeek, Claude, GPT, and Gemini to find the ultimate consensus.
+                </p>
+              </div>
+
+              <div className="bg-card p-8 rounded-2xl border shadow-sm flex flex-col items-center text-center hover:shadow-md transition-shadow">
+                <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-6 text-primary">
+                  <Globe className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">Live Web Extraction</h3>
+                <p className="text-muted-foreground">
+                  AI without search is just guessing. Veridica dynamically searches Google and Wikipedia, providing primary source links for every verdict.
+                </p>
+              </div>
+
+              <div className="bg-card p-8 rounded-2xl border shadow-sm flex flex-col items-center text-center hover:shadow-md transition-shadow">
+                <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-6 text-primary">
+                  <BarChart className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">Fact-Based Scoring</h3>
+                <p className="text-muted-foreground">
+                  No more vague answers. Get a definitive Truth Score (0-100) backed by citation grades, scientific consensus, and reasoning consistency.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Compare to Others Section */}
+        <section className="w-full max-w-6xl mx-auto px-6 py-24">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">How We Compare</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              See why Veridica is the ultimate upgrade to your fact-checking workflow.
+            </p>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+            <div className="grid grid-cols-4 border-b bg-muted/50 p-4 font-semibold text-sm md:text-base">
+              <div className="col-span-1">Feature</div>
+              <div className="col-span-1 text-center text-primary flex flex-col items-center gap-1">
+                <ShieldCheck className="w-5 h-5" /> Veridica
+              </div>
+              <div className="col-span-1 text-center text-muted-foreground">Traditional Search</div>
+              <div className="col-span-1 text-center text-muted-foreground">Standard AI Chat</div>
+            </div>
+            
+            <div className="divide-y text-sm md:text-base">
+              <div className="grid grid-cols-4 p-4 items-center">
+                <div className="col-span-1 font-medium">Verdict Confidence</div>
+                <div className="col-span-1 flex justify-center text-primary"><CheckCircle2 className="w-5 h-5" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><XIcon className="w-5 h-5 opacity-50" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><MessageSquareWarning className="w-5 h-5 opacity-50" /></div>
+              </div>
+              
+              <div className="grid grid-cols-4 p-4 items-center">
+                <div className="col-span-1 font-medium">Multiple AI Consensus</div>
+                <div className="col-span-1 flex justify-center text-primary"><CheckCircle2 className="w-5 h-5" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><XIcon className="w-5 h-5 opacity-50" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><XIcon className="w-5 h-5 opacity-50" /></div>
+              </div>
+
+              <div className="grid grid-cols-4 p-4 items-center">
+                <div className="col-span-1 font-medium">Primary Source Citations</div>
+                <div className="col-span-1 flex justify-center text-primary"><CheckCircle2 className="w-5 h-5" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><CheckCircle2 className="w-5 h-5 opacity-50" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><XIcon className="w-5 h-5 opacity-50" /></div>
+              </div>
+
+              <div className="grid grid-cols-4 p-4 items-center">
+                <div className="col-span-1 font-medium">Immune to SEO Spam</div>
+                <div className="col-span-1 flex justify-center text-primary"><CheckCircle2 className="w-5 h-5" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><XIcon className="w-5 h-5 opacity-50" /></div>
+                <div className="col-span-1 flex justify-center text-muted-foreground"><CheckCircle2 className="w-5 h-5 opacity-50" /></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQs */}
+        <section className="w-full bg-muted/30 border-y py-24">
+          <div className="max-w-3xl mx-auto px-6">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold mb-4">Common FAQs</h2>
+            </div>
+            
+            <Accordion className="w-full bg-card rounded-2xl border px-6 py-2 shadow-sm">
+              <AccordionItem value="item-1">
+                <AccordionTrigger className="text-lg font-medium hover:no-underline hover:text-primary transition-colors">What is Veridica?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground text-base leading-relaxed">
+                  Veridica is an AI-powered evidence engine that fact-checks claims using a consensus of top-tier AI models (like GPT-4, Claude 3.5, and DeepSeek) backed by real-time web search retrieval.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="item-2">
+                <AccordionTrigger className="text-lg font-medium hover:no-underline hover:text-primary transition-colors">How does the multi-model consensus work?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground text-base leading-relaxed">
+                  When you submit a claim, Veridica searches the web to build an "evidence snapshot". It then feeds this exact same snapshot to multiple different AI models simultaneously. The system calculates an aggregated truth score based on whether the different AIs agree or disagree.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="item-3">
+                <AccordionTrigger className="text-lg font-medium hover:no-underline hover:text-primary transition-colors">Are the search results biased?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground text-base leading-relaxed">
+                  We use neutral retrieval systems and strictly instruct our AI reviewers to look for primary source evidence rather than relying on internet rumor consensus.
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="w-full max-w-4xl mx-auto px-6 py-24 text-center">
+          <h2 className="text-3xl md:text-5xl font-bold mb-6">Ready to find the truth?</h2>
+          <p className="text-xl text-muted-foreground mb-8">Join the researchers verifying the internet, one claim at a time.</p>
+          <Link href="/search">
+            <Button size="lg" className="h-14 px-8 text-lg font-semibold rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all hover:-translate-y-1">
+              Start Analyzing Claims <ArrowRight className="ml-2 w-5 h-5" />
+            </Button>
+          </Link>
+        </section>
+
+      </main>
+
+      {/* Footer / Mesh API Credit */}
+      <footer className="border-t bg-card py-12 px-6">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-2 opacity-80">
+            <ShieldCheck className="w-6 h-6 text-primary" />
+            <span className="font-bold text-lg">Veridica</span>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 hidden sm:flex mr-2">
-                <Switch 
-                  id="smart-routing-inline" 
-                  checked={smartRouting} 
-                  onCheckedChange={(checked) => {
-                    setSmartRouting(checked)
-                    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting: checked, selectedModels }))
-                  }} 
-                  className="scale-75 data-[state=checked]:bg-primary"
-                />
-                <label htmlFor="smart-routing-inline" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer select-none">
-                  Smart Routing
-                </label>
-              </div>
-
-              {!smartRouting && (
-                <ModelSelector 
-                  selectedModels={selectedModels}
-                  onSelectedModelsChange={(models) => {
-                    const toSet = models.length > 0 ? models : [DEFAULT_MODELS[0]];
-                    setSelectedModels(toSet);
-                    localStorage.setItem("veridica_settings", JSON.stringify({ smartRouting, selectedModels: toSet }));
-                  }}
-                  triggerClassName="text-xs font-semibold text-foreground/80 hover:text-foreground flex items-center gap-1 transition-colors bg-muted/30 px-3 py-1.5 rounded-full hover:bg-muted/50 border border-transparent hover:border-border"
-                  triggerContent={
-                    <>
-                      {selectedModels.length === 1 ? getDisplayName(selectedModels[0]) : `${selectedModels.length} Models`}
-                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                    </>
-                  }
-                />
-              )}
+          <div className="flex flex-col items-center md:items-end text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full border mb-2 shadow-sm">
+              <Zap className="w-4 h-4 text-yellow-500" />
+              <span>A huge thanks to <strong className="text-foreground">Mesh API</strong></span>
             </div>
-
-            <Button 
-              onClick={() => handleAnalyze("text", claimText)}
-              disabled={!claimText.trim()}
-              size="sm" 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-9 rounded-full text-xs transition-transform hover:scale-105"
-            >
-              Analyze
-              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-            </Button>
+            <p className="text-center md:text-right max-w-sm">
+              Powering the multi-model infrastructure and routing backend that makes our consensus engine possible.
+            </p>
           </div>
         </div>
-      </div>
-      
-      <div className="mt-8 flex items-center justify-center gap-4 animate-in slide-in-from-bottom-4 fade-in duration-700">
-        <Button variant="outline" onClick={loadDemo} className="border-primary/50 text-primary hover:bg-primary/10">
-          <Sparkles className="w-4 h-4 mr-2" />
-          Load Demo Example
-        </Button>
-      </div>
-
-      {/* Session History FAB & Dialog */}
-      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
-        <DialogTrigger className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 h-14 px-6 rounded-full shadow-lg border border-primary/30 bg-background/95 backdrop-blur hover:bg-muted/50 transition-all group flex items-center justify-center cursor-pointer text-sm">
-          <History className="w-5 h-5 mr-2 text-primary group-hover:scale-110 transition-transform" />
-          <span className="font-semibold text-foreground/90">Session History</span>
-        </DialogTrigger>
-        <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 border-primary/20">
-          <DialogHeader className="p-4 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <History className="w-4 h-4 text-primary" />
-              Session History
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {history.length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center mt-10">No history yet</div>
-            ) : (
-              history.map(item => (
-                <div 
-                  key={item.id} 
-                  onClick={() => {
-                    setIsHistoryDialogOpen(false);
-                    if (item.type === 'text') setClaimText(item.content);
-                    else if (item.type === 'url') setUrlInput(item.content);
-                    handleAnalyze(item.type, item.content, true);
-                  }}
-                  className="p-3 rounded-lg border bg-background hover:border-primary/50 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    {item.type === 'text' && <FileText className="w-3.5 h-3.5 text-primary" />}
-                    {item.type === 'url' && <LinkIcon className="w-3.5 h-3.5 text-primary" />}
-                    {item.type === 'file' && <FileText className="w-3.5 h-3.5 text-primary" />}
-                    <span className="text-xs font-medium text-muted-foreground capitalize">{item.type}</span>
-                    <span className="text-[10px] text-muted-foreground/60 ml-auto">{new Date(item.date).toLocaleDateString()}</span>
-                  </div>
-                  <p className="text-sm text-foreground/90 font-medium line-clamp-3 leading-snug">
-                    {item.content}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-          {history.length > 0 && (
-            <div className="p-4 border-t bg-muted/10">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
-                onClick={() => {
-                  setHistory([]);
-                  localStorage.removeItem("veridica_history");
-                }}
-              >
-                Clear History
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      </footer>
     </div>
-  </div>
-</div>
+  )
+}
+
+function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      <path d="M5 3v4" />
+      <path d="M19 17v4" />
+      <path d="M3 5h4" />
+      <path d="M17 19h4" />
+    </svg>
+  )
+}
+
+function XIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
   )
 }

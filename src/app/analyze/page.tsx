@@ -127,7 +127,7 @@ function AnalyzeContent() {
   const [loadingState, setLoadingState] = useState<"idle" | "extracting" | "retrieving" | "analyzing" | "done">("idle")
   
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true)
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true)
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
   
   const [analyzedClaims, setAnalyzedClaims] = useState<ClaimAnalysis[]>([])
   const [overallScore, setOverallScore] = useState(0)
@@ -139,6 +139,11 @@ function AnalyzeContent() {
   // Redesign state variables
   const [activeTab, setActiveTab] = useState<"overview" | "claims" | "sources" | "consensus">("overview")
   const [inputCollapsed, setInputCollapsed] = useState(false)
+  const [reportDate, setReportDate] = useState("")
+  
+  useEffect(() => {
+    setReportDate(new Date().toLocaleDateString())
+  }, [])
   const [expandedClaims, setExpandedClaims] = useState<Record<number, boolean>>({})
   const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>({})
   const [sourceExtractorModels, setSourceExtractorModels] = useState<string[]>(["openai/gpt-4o-mini"])
@@ -241,7 +246,7 @@ function AnalyzeContent() {
           : modelsList;
 
         const initialExtractors = ser
-          ? determineOptimalExtractors(textToAnalyze, availableModels.length > 0 ? availableModels.map(m => typeof m === 'string' ? m : (m as any).id || "") : ["openai/gpt-4o-mini", "google/gemini-1.5-flash"])
+          ? determineOptimalExtractors(textToAnalyze, availableModels.length > 0 ? availableModels.map(m => typeof m === 'string' ? m : (m as any).id || "") : ["openai/gpt-4o-mini", "anthropic/claude-3-haiku"])
           : extractor;
           
         if (payload.image) {
@@ -253,7 +258,7 @@ function AnalyzeContent() {
         console.error("Failed to parse input payload", e)
       }
     } else {
-      router.push("/")
+      router.push("/search")
     }
   }, []) // eslint-disable-line
 
@@ -269,50 +274,78 @@ function AnalyzeContent() {
 
       setLoadingState("retrieving")
       const claimsToAnalyze = extracted.slice(0, 5) 
-      const detailedClaims: ClaimAnalysis[] = []
-      
-      for (const claim of claimsToAnalyze) {
-        const snapshot = await gatherEvidence(claim.text, extractorModels)
-        
-        setLoadingState("analyzing") // Switch state as we pass to models
-        const results = await analyzeClaim(claim.text, snapshot, modelsToUse)
-        let totalConfidence = 0; let trueCount = 0; let falseCount = 0; let unvCount = 0;
-        
-        results.forEach(r => {
-          totalConfidence += r.confidence;
-          if (r.verdict.includes("True")) trueCount++;
-          else if (r.verdict.includes("False")) falseCount++;
-          else if (r.verdict.includes("Unverifiable")) unvCount++;
-        });
+      setLoadingState("analyzing")
+      const detailedClaims: ClaimAnalysis[] = await Promise.all(
+        claimsToAnalyze.map(async (claim) => {
+          if (claim.claimType === "Personal") {
+            const results = modelsToUse.map(model => ({
+              model: model,
+              verdict: "Unverifiable" as const,
+              confidence: 100,
+              explanation: "This is a personal claim. Without access to the person's records or independent evidence, it cannot be verified or disproven.",
+              key_sources: []
+            }));
+            const snapshot = {
+              claim_analyzed: claim.text,
+              total_sources_found: 0,
+              sources: [],
+              context: "Skipped web search: Semantic classifier detected a personal claim."
+            };
+            
+            return {
+              ...claim,
+              modelResults: results,
+              aggregatedVerdict: "Unverifiable",
+              aggregatedConfidence: 100,
+              snapshot: snapshot
+            } as any;
+          }
 
-        const avgConf = Math.round(totalConfidence / results.length);
-        const agreementBonus = (results.length > 1 && (trueCount === results.length || falseCount === results.length)) ? 10 : 0;
-        const finalConf = Math.min(100, avgConf + agreementBonus);
-        
-        let aggVerdict = "Mixed";
-        if (unvCount > trueCount && unvCount > falseCount) aggVerdict = "Unverifiable";
-        else if (trueCount > falseCount) aggVerdict = falseCount === 0 ? "True" : "Mostly True";
-        else if (falseCount > trueCount) aggVerdict = trueCount === 0 ? "False" : "Mostly False";
+          const snapshot = await gatherEvidence(claim.text, extractorModels)
+          const results = await analyzeClaim(claim.text, snapshot, modelsToUse)
+          
+          let totalConfidence = 0; let trueCount = 0; let falseCount = 0; let unvCount = 0;
+          
+          results.forEach(r => {
+            totalConfidence += r.confidence;
+            if (r.verdict.includes("True")) trueCount++;
+            else if (r.verdict.includes("False")) falseCount++;
+            else if (r.verdict.includes("Unverifiable")) unvCount++;
+          });
 
-        detailedClaims.push({ 
-          ...claim, 
-          modelResults: results, 
-          aggregatedVerdict: aggVerdict, 
-          aggregatedConfidence: finalConf,
-          snapshot: snapshot
-        } as any)
-      }
+          const avgConf = Math.round(totalConfidence / results.length);
+          const agreementBonus = (results.length > 1 && (trueCount === results.length || falseCount === results.length)) ? 10 : 0;
+          const finalConf = Math.min(100, avgConf + agreementBonus);
+          
+          let aggVerdict = "Mixed";
+          if (unvCount > trueCount && unvCount > falseCount) aggVerdict = "Unverifiable";
+          else if (trueCount > falseCount) aggVerdict = falseCount === 0 ? "True" : "Mostly True";
+          else if (falseCount > trueCount) aggVerdict = trueCount === 0 ? "False" : "Mostly False";
+
+          return { 
+            ...claim, 
+            modelResults: results, 
+            aggregatedVerdict: aggVerdict, 
+            aggregatedConfidence: finalConf,
+            snapshot: snapshot
+          } as any;
+        })
+      );
 
       setAnalyzedClaims(detailedClaims)
       if (detailedClaims.length > 0) {
         let totalScore = 0;
+        let verifiableCount = 0;
         detailedClaims.forEach(c => {
-          totalScore += c.aggregatedVerdict.includes("True") ? c.aggregatedConfidence : (100 - c.aggregatedConfidence);
+          if (!c.aggregatedVerdict.includes("Unverifiable")) {
+            totalScore += c.aggregatedVerdict.includes("True") ? c.aggregatedConfidence : (100 - c.aggregatedConfidence);
+            verifiableCount++;
+          }
         });
-        const computedScore = Math.round(totalScore / detailedClaims.length);
+        const computedScore = verifiableCount > 0 ? Math.round(totalScore / verifiableCount) : 0;
         setOverallScore(computedScore);
         
-        if (computedScore <= 60) {
+        if (computedScore <= 90 && verifiableCount > 0) {
           const fullSnapshot = { sources: [] as any[], context: "" };
           detailedClaims.forEach(c => {
             const snap = (c as any).snapshot;
@@ -321,7 +354,16 @@ function AnalyzeContent() {
               fullSnapshot.context += "\n" + snap.context;
             }
           });
-          const explanation = await analyzeMisconception(text, fullSnapshot as unknown as EvidenceSnapshot, modelsToUse[0]);
+          let pipelineVerdictText = "UNKNOWN";
+          const isAllUnverifiable = detailedClaims.every(c => c.aggregatedVerdict.includes("Unverifiable"));
+          if (isAllUnverifiable) pipelineVerdictText = "UNVERIFIABLE";
+          else if (computedScore >= 80) pipelineVerdictText = "TRUE";
+          else if (computedScore > 60) pipelineVerdictText = "MOSTLY TRUE";
+          else if (computedScore >= 40) pipelineVerdictText = "MIXED";
+          else if (computedScore >= 20) pipelineVerdictText = "MOSTLY FALSE";
+          else pipelineVerdictText = "FALSE";
+
+          const explanation = await analyzeMisconception(text, fullSnapshot as unknown as EvidenceSnapshot, modelsToUse[0], pipelineVerdictText);
           setMisconception(explanation);
         } else {
           setMisconception("");
@@ -349,36 +391,49 @@ function AnalyzeContent() {
 
 
   const handleExport = async () => {
-    const element = document.getElementById("pdf-report-content")
-    if (!element) return;
-    
-    // Dynamically import html2pdf to avoid SSR 'self is not defined' error
-    const html2pdf = (await import("html2pdf.js")).default;
-    
-    // Un-hide the branding header just for PDF, adjust styles
-    element.classList.add("print-mode")
-    const opt = {
-      margin:       0.5,
-      filename:     'veridica_report.pdf',
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
-    };
-
-    html2pdf().set(opt).from(element).save().then(() => {
-      element.classList.remove("print-mode")
-    });
+    window.print();
   }
 
   let overallVerdictText = "UNKNOWN";
   if (analyzedClaims.length > 0) {
-    if (overallScore >= 80) overallVerdictText = "TRUE";
+    const isAllUnverifiable = analyzedClaims.every(c => c.aggregatedVerdict.includes("Unverifiable"));
+    if (isAllUnverifiable) overallVerdictText = "UNVERIFIABLE";
+    else if (overallScore >= 80) overallVerdictText = "TRUE";
     else if (overallScore > 60) overallVerdictText = "MOSTLY TRUE";
     else if (overallScore >= 40) overallVerdictText = "MIXED";
     else if (overallScore >= 20) overallVerdictText = "MOSTLY FALSE";
     else overallVerdictText = "FALSE";
   }
   const verdictStyle = getVerdictStyle(overallVerdictText)
+
+  let agreeingModelsCount = 0;
+  if (analyzedClaims.length > 0 && activeModels.length > 0) {
+    activeModels.forEach(model => {
+      let trueCount = 0; let falseCount = 0; let unvCount = 0;
+      analyzedClaims.forEach(c => {
+        const res = c.modelResults.find(r => r.model === model);
+        if (res?.verdict.includes("True")) trueCount++;
+        else if (res?.verdict.includes("False")) falseCount++;
+        else if (res?.verdict.includes("Unverifiable")) unvCount++;
+      });
+      
+      let globalVerdict = "MIXED";
+      if (unvCount > trueCount && unvCount > falseCount) globalVerdict = "UNVERIFIABLE";
+      else if (trueCount > falseCount) globalVerdict = falseCount === 0 ? "TRUE" : "MOSTLY TRUE";
+      else if (falseCount > trueCount) globalVerdict = trueCount === 0 ? "FALSE" : "MOSTLY FALSE";
+      
+      if (
+        (overallVerdictText.includes("TRUE") && globalVerdict.includes("TRUE")) ||
+        (overallVerdictText.includes("FALSE") && globalVerdict.includes("FALSE")) ||
+        (overallVerdictText === "UNVERIFIABLE" && globalVerdict === "UNVERIFIABLE") ||
+        (overallVerdictText === "MIXED" && globalVerdict === "MIXED")
+      ) {
+        agreeingModelsCount++;
+      }
+    });
+  } else {
+    agreeingModelsCount = activeModels.length;
+  }
 
   const allSources = useMemo(() => {
     const sourcesMap = new Map();
@@ -445,7 +500,7 @@ Always cite your sources using their domain names when explaining your answers. 
         { role: "user", content: userMsg }
       ];
 
-      const apiKeyHeader = localStorage.getItem("mesh_api_key") || "";
+      const apiKeyHeader = localStorage.getItem("veridica_api_key") || "";
 
       const response = await fetch("/api/mesh/chat/completions", {
         method: "POST",
@@ -453,7 +508,7 @@ Always cite your sources using their domain names when explaining your answers. 
         body: JSON.stringify({
           model: chatModel,
           messages,
-          temperature: 0.3
+          temperature: 0.0
         })
       });
 
@@ -471,11 +526,11 @@ Always cite your sources using their domain names when explaining your answers. 
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
+    <div id="report-container" className="flex flex-col h-screen overflow-hidden bg-background">
       {/* Top Navigation & Model Selector */}
       <header className="flex items-center justify-between border-b px-6 py-4 bg-card z-10 shrink-0">
         <div className="flex items-center gap-4">
-          <Link href="/">
+          <Link href="/search">
             <Button variant="ghost" size="icon" className="rounded-full">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -489,16 +544,10 @@ Always cite your sources using their domain names when explaining your answers. 
         <div className="flex items-center gap-2 md:gap-4">
           <div className="flex items-center gap-1 md:gap-2">
             <ThemeToggle />
-            <AboutModal />
-            <Link href="https://github.com/chetangupta06/Veridica-The-AI-Evidence-Engine" target="_blank" rel="noreferrer">
-              <Button variant="ghost" size="icon">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              </Button>
-            </Link>
           </div>
 
           <div className="flex items-center gap-3 border-l pl-4">
-            <Button variant="outline" size="sm" onClick={() => { sessionStorage.removeItem("veridica_input"); router.push("/") }}>
+            <Button variant="outline" size="sm" onClick={() => { sessionStorage.removeItem("veridica_input"); router.push("/search") }}>
               <Plus className="w-4 h-4 mr-2" /> New Analysis
             </Button>
             <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleExport}>
@@ -506,55 +555,9 @@ Always cite your sources using their domain names when explaining your answers. 
             </Button>
           </div>
 
-          <div className="flex items-center gap-2 border-l pl-6">
-            <Switch id="smart-routing" checked={smartRouting} onCheckedChange={setSmartRouting} />
-            <label htmlFor="smart-routing" className="text-sm font-medium cursor-pointer text-muted-foreground">Smart Routing</label>
-          </div>
+
           
-          <div className="hidden md:flex items-center gap-2 border-l pl-6 relative">
-            <span className="text-sm text-muted-foreground mr-2">Route to:</span>
-            <div className="relative">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className={`min-w-[180px] justify-between ${smartRouting ? 'opacity-50 pointer-events-none' : ''}`}
-              >
-                {selectedModels.length === 1 ? (getDisplayName(selectedModels[0]) || selectedModels[0]) : `${selectedModels.length} Models Selected`}
-                <ChevronDown className="w-4 h-4 ml-2 opacity-50" />
-              </Button>
-              {dropdownOpen && (
-                <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-primary/20 rounded-md shadow-xl z-50 p-2 flex flex-col gap-1">
-                  {allModels.map(m => (
-                    <label key={m} className="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer text-sm font-medium transition-colors">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-primary text-primary focus:ring-primary w-4 h-4 accent-primary"
-                        checked={selectedModels.includes(m)}
-                        onChange={(e) => {
-                          let newModels;
-                          if (e.target.checked) {
-                            newModels = [...selectedModels, m];
-                          } else {
-                            newModels = selectedModels.filter(x => x !== m);
-                            if (newModels.length === 0) newModels = [m]; // Prevent empty
-                          }
-                          setSelectedModels(newModels)
-                        }}
-                      />
-                      {getDisplayName(m)}
-                    </label>
-                  ))}
-                  <div className="border-t mt-2 pt-2 text-right">
-                    <Button size="sm" className="w-full" onClick={() => {
-                       setDropdownOpen(false)
-                       if (originalInput) runFullPipeline(originalInput, uploadedImage, selectedModels, sourceExtractorModels)
-                    }}>Apply & Run</Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+
         </div>
       </header>
 
@@ -640,7 +643,7 @@ Always cite your sources using their domain names when explaining your answers. 
                   <Network className="h-8 w-8 text-primary" />
                   <h1 className="text-3xl font-bold tracking-tight">Veridica Report</h1>
                 </div>
-                <p className="text-muted-foreground">Generated on {new Date().toLocaleDateString()}</p>
+                <p className="text-muted-foreground">Generated on {reportDate}</p>
               </div>
 
               {/* Hero Verdict */}
@@ -657,7 +660,9 @@ Always cite your sources using their domain names when explaining your answers. 
                 </div>
                 
                 <p className="text-base font-semibold leading-relaxed text-foreground">
-                  {misconception ? (misconception.split('.').slice(0, 2).join('.') + '.') : (analyzedClaims[0]?.explanation ? (analyzedClaims[0].explanation.split('.')[0] + '.') : "Analyzing claim evidence...")}
+                  {overallVerdictText === "UNVERIFIABLE" 
+                    ? analyzedClaims[0]?.modelResults?.[0]?.explanation 
+                    : (misconception ? misconception : (analyzedClaims[0]?.explanation || "Analyzing claim evidence..."))}
                 </p>
                 
                 <hr className="border-border/30" />
@@ -666,7 +671,7 @@ Always cite your sources using their domain names when explaining your answers. 
                   <div className="flex items-center gap-4">
                     <span>Confidence <strong className="text-foreground font-bold">{Math.round(analyzedClaims.reduce((acc, c) => acc + c.aggregatedConfidence, 0) / (analyzedClaims.length || 1)) || 0}%</strong></span>
                     <span>•</span>
-                    <span><strong className="text-foreground font-bold">{activeModels.length}/{activeModels.length}</strong> AI Models Agree</span>
+                    <span><strong className="text-foreground font-bold">{agreeingModelsCount}/{activeModels.length}</strong> AI Models Agree</span>
                     <span>•</span>
                     <span><strong className="text-foreground font-bold">{allSources.length}</strong> Cited Sources</span>
                   </div>
@@ -1055,14 +1060,14 @@ Always cite your sources using their domain names when explaining your answers. 
                                 {isExpanded && (
                                   <tr>
                                     <td colSpan={4} className="px-6 py-4 bg-muted/5 border-t border-b border-border/20">
-                                      <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                                      <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 p-2">
                                         {explanations.map((exp, idx) => (
-                                          <div key={idx} className="text-xs text-[#9CA3AF] leading-relaxed border-l-2 border-border/30 pl-3">
-                                            <strong className="text-foreground/80 block mb-1">Claim {idx+1} Consensus:</strong>
-                                            "{exp}"
+                                          <div key={idx} className="text-sm text-foreground/90 leading-relaxed bg-muted/40 p-4 rounded-lg border border-border/50 shadow-sm">
+                                            <strong className="text-primary font-bold block mb-2 text-base">Claim {idx+1} Consensus:</strong>
+                                            <p className="whitespace-pre-wrap">{exp}</p>
                                           </div>
                                         ))}
-                                        {explanations.length === 0 && <div className="text-xs text-muted-foreground">No explanations loaded.</div>}
+                                        {explanations.length === 0 && <div className="text-sm text-muted-foreground">No explanations loaded.</div>}
                                       </div>
                                     </td>
                                   </tr>
@@ -1167,11 +1172,18 @@ Always cite your sources using their domain names when explaining your answers. 
                   const mStyle = getVerdictStyle(globalVerdict);
                   
                   return (
-                    <div key={model} className="flex justify-between items-center text-sm">
-                      <span>{getDisplayName(model)}</span>
-                      <Badge variant="outline" className={`${mStyle.color} ${mStyle.border}`}>
-                        {globalVerdict}
-                      </Badge>
+                    <div key={model} className="flex flex-col p-3 bg-background border rounded-lg shadow-sm">
+                      <div className="flex justify-between items-center text-sm mb-1">
+                        <span className="font-medium text-foreground">{getDisplayName(model)}</span>
+                        <Badge variant="outline" className={`${mStyle.color} ${mStyle.border}`}>
+                          {globalVerdict}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                         <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500"/> {trueCount} True</span>
+                         <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-yellow-500"/> {falseCount} False</span>
+                         <span className="flex items-center gap-1"><XCircle className="w-3 h-3 text-gray-500"/> {unvCount} Unv</span>
+                      </div>
                     </div>
                   )
                 })}
@@ -1220,19 +1232,29 @@ Always cite your sources using their domain names when explaining your answers. 
       </div>
 
       <style dangerouslySetInnerHTML={{__html: `
-        .print-mode {
-          background: white !important;
-          color: black !important;
-        }
-        .print-mode .print-header {
-          display: block !important;
-        }
-        .print-mode .bg-card {
-          background: white !important;
-          border-color: #e5e7eb !important;
-        }
-        .print-mode mark {
-          color: black !important;
+        @media print {
+          body, html, #report-container {
+            background: white !important;
+            color: black !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          * {
+            overflow: visible !important;
+          }
+          header, button, .hidden.lg\\:flex {
+            display: none !important;
+          }
+          .print-header {
+            display: block !important;
+          }
+          .bg-card {
+            background: white !important;
+            border-color: #e5e7eb !important;
+          }
+          mark {
+            color: black !important;
+          }
         }
       `}} />
     </div>

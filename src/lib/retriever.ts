@@ -73,14 +73,14 @@ async function performSearchWithLLM(claim: string, searchContext: string, model:
     messages: [
       {
         role: "system",
-        content: `You are ${agentName}, a web research agent. The current year is ${new Date().getFullYear()}. For the given claim, evaluate the provided raw search results from Wikipedia and Google. Select the 2-3 most relevant, factual sources that provide strong evidence (supporting or refuting). Return ONLY a JSON array of objects with keys: id (unique string), domain (string like 'example.com'), url (string absolute URL), title (string), snippet (string excerpt, fix any broken sentences), and reliabilityScore (number 1-100 based on the credibility of the domain and relevance). Do not use markdown blocks like \`\`\`json.`
+        content: `You are ${agentName}, a web research agent. The current year is ${new Date().getFullYear()}. For the given claim, evaluate the provided raw search results from Wikipedia and Google. Select the 2-3 most relevant, factual sources that provide strong evidence (supporting or refuting). Return ONLY a strict JSON array of objects with keys: id (unique string), domain (string like 'example.com'), url (string absolute URL), title (string), snippet (string excerpt, fix any broken sentences), and reliabilityScore (number 1-100). Do not use markdown blocks like \`\`\`json. Ensure ALL string values inside the JSON (especially the snippet) properly escape internal quotes to prevent JSON.parse errors.`
       },
       {
         role: "user",
         content: `Claim to analyze: ${claim}\n\nRaw Search Results Context:\n${searchContext}`
       }
     ],
-    temperature: 0.2,
+    temperature: 0.0,
   });
 
   if (response.usage?.total_tokens) {
@@ -91,7 +91,8 @@ async function performSearchWithLLM(claim: string, searchContext: string, model:
   if (!content) return [];
 
   try {
-    const cleanContent = content.replace(/^```json/m, "").replace(/^```/m, "").trim();
+    const match = content.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    const cleanContent = match ? match[0] : content.replace(/```json/gi, "").replace(/```/g, "").trim();
     const parsed = JSON.parse(cleanContent);
     return parsed.map((src: any) => ({
       ...src,
@@ -135,10 +136,15 @@ export async function gatherEvidence(claim: string, extractorModels: string[] = 
     // 1. Fetch Real Web Data
     const serperKey = typeof window !== 'undefined' ? localStorage.getItem("veridica_serper_api_key") : null;
     
+    // Optimize query for search engines
+    const stopWords = new Set(["a", "an", "the", "and", "or", "but", "is", "are", "was", "were", "to", "in", "on", "with", "by", "for", "at", "about", "as", "into", "like", "through", "after", "over", "between", "out", "against", "during", "without", "before", "under", "around", "among", "this", "that", "these", "those", "it", "its", "they", "their", "them", "have", "has", "had", "do", "does", "did", "can", "could", "would", "should", "will", "of", "from"]);
+    const keywords = claim.replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w.toLowerCase()));
+    const optimizedQuery = keywords.slice(0, 6).join(' ');
+
     // Fetch Wikipedia & Serper in parallel
     const [wikiResults, serperResults] = await Promise.all([
-      searchWikipedia(claim),
-      searchSerper(claim, serperKey || "")
+      searchWikipedia(optimizedQuery),
+      searchSerper(optimizedQuery, serperKey || "")
     ]);
     
     const combinedRawResults = [...wikiResults, ...serperResults];
