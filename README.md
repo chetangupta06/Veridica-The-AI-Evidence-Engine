@@ -27,7 +27,7 @@ Instead of trusting a single AI hallucination, Veridica builds trust by sourcing
 - **Framework**: [Next.js 14+ (App Router)](https://nextjs.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
 - **Icons**: [Lucide React](https://lucide.dev/)
-- **AI Integration**: [Mesh API](https://mesh.dev/) for cross-model inference
+- **AI Integration**: [Mesh API](https://meshapi.ai/) for cross-model inference
 - **Search**: [Serper.dev](https://serper.dev/) (Google Search API fallback)
 
 ## 🚀 Getting Started

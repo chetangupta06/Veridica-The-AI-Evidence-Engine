@@ -216,7 +216,7 @@ export default function LandingPage() {
           <div className="flex flex-col items-center md:items-end text-sm text-muted-foreground">
             <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full border mb-2 shadow-sm">
               <Zap className="w-4 h-4 text-yellow-500" />
-              <span>A huge thanks to <strong className="text-foreground">Mesh API</strong></span>
+              <span>A huge thanks to <a href="https://meshapi.ai/" target="_blank" rel="noopener noreferrer" className="hover:underline font-bold text-foreground">Mesh API</a></span>
             </div>
             <p className="text-center md:text-right max-w-sm">
               Powering the multi-model infrastructure and routing backend that makes our consensus engine possible.
