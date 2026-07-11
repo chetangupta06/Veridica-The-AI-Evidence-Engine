@@ -3,6 +3,10 @@
   <h1>Veridica</h1>
   <p><strong>The AI Evidence Engine</strong></p>
   <p>Paste any claim. Get evidence, not opinions.</p>
+  <br/>
+  <a href="https://veridica-ai.vercel.app/" target="_blank">
+    <img src="https://img.shields.io/badge/Live%20Demo-Vercel-brightgreen?style=for-the-badge&logo=vercel" alt="Live Demo on Vercel"/>
+  </a>
 </div>
 
 ---
