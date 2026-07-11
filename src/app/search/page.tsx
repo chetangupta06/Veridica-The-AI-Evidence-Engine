@@ -218,10 +218,12 @@ export default function Home() {
         {/* Top Navbar */}
         <div className="w-full p-4 border-b flex justify-between items-center gap-2 md:gap-4 shrink-0 h-[73px] sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center">
-            <span className="text-xl font-bold font-serif tracking-tight ml-2 md:ml-4 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
+            <Link href="/" className="text-xl font-bold font-serif tracking-tight ml-2 md:ml-4 flex items-center gap-2">
+              <div className="relative w-8 h-8 flex items-center justify-center">
+                <img src="/logo.png" alt="Veridica Logo" className="object-contain w-full h-full drop-shadow-sm scale-125" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              </div>
               Veridica
-            </span>
+            </Link>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             <Button variant="ghost" onClick={() => router.push("/settings")} className="text-sm text-muted-foreground hover:text-foreground transition-colors md:mr-2">
@@ -243,8 +245,11 @@ export default function Home() {
       {/* Hero Section */}
       <div className="w-full max-w-4xl text-center mb-12 mt-12">
         <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-full">
-            <ShieldCheck className="h-10 w-10 text-primary" />
+          <div className="relative w-24 h-24 md:w-32 md:h-32">
+            <div className="w-full h-full flex items-center justify-center p-2">
+              <img src="/logo.png" alt="Veridica Logo" className="w-full h-full object-contain drop-shadow-2xl scale-110" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            </div>
+            <div className="absolute inset-0 -z-10 bg-primary/20 blur-3xl rounded-full"></div>
           </div>
         </div>
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
